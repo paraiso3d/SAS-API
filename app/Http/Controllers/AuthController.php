@@ -26,21 +26,28 @@ class AuthController extends Controller
     }
 
 
+
     public function login(Request $request)
     {
+        // Validate the request
         $credentials = $request->validate([
-            'email' => 'required|string|',
+            'email' => 'required|string', // still called email in JSON
             'password' => 'required|string|min:8',
         ]);
 
-        if (!auth()->attempt($credentials)) {
+        // Map 'email' to 'name' for authentication
+        $loginData = [
+            'name' => $credentials['email'],
+            'password' => $credentials['password'],
+        ];
+
+        if (!auth()->attempt($loginData)) {
             return response()->json([
                 'message' => 'Invalid credentials',
             ], 401);
         }
 
         $user = auth()->user();
-
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
@@ -49,6 +56,7 @@ class AuthController extends Controller
             'token' => $token
         ], 200);
     }
+
 
 
     public function logout(Request $request)
