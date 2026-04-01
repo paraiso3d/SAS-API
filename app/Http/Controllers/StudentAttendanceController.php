@@ -16,40 +16,52 @@ class StudentAttendanceController extends Controller
     public function timeIn(Request $request)
     {
         $request->validate([
-            'rfid_tag_number' => 'required|string|max:250',
+            'fingerprint_id' => 'required|string|max:250',
         ]);
 
-        $student = Students::where('rfid_tag_number', $request->rfid_tag_number)
+        $fingerprintId = $request->fingerprint_id;
+
+        // Find student using fingerprint ID
+        $student = Students::where('fingerprint_id', $fingerprintId)
             ->where('is_archived', 0)
             ->first();
 
         if (!$student) {
-            Log::warning('Student not found for RFID: ' . $request->rfid_tag_number);
-            return response()->json(['message' => 'Student not found'], 404);
+            Log::warning('Student not found for Fingerprint ID: ' . $fingerprintId);
+            return response()->json([
+                'message' => 'Student not found'
+            ], 404);
         }
 
-        $today = Carbon::today()->toDateString();
+        $today = now()->toDateString();
 
-        $attendance = StudentAttendance::firstOrNew([
-            'rfid_tag_number' => $request->rfid_tag_number,
-            'attendance_date' => $today
+        // Get or create attendance
+        $attendance = StudentAttendance::firstOrCreate(
+            [
+                'fingerprint_id' => $fingerprintId,
+                'attendance_date' => $today
+            ],
+            [
+                'student_number' => $student->student_number,
+                'status' => 'present'
+            ]
+        );
+
+        // Already timed in
+        if ($attendance->time_in) {
+            return response()->json([
+                'message' => 'Student already timed in',
+                'attendance' => $attendance
+            ], 200);
+        }
+
+        // Record time in
+        $attendance->update([
+            'time_in' => now()
         ]);
 
-        if ($attendance->exists && $attendance->time_in) {
-            // Already timed in
-            return response()->json(['message' => 'Student already timed in'], 200);
-        }
-
-        // Set the time_in only if not set
-        if (!$attendance->time_in) {
-            $attendance->student_number = $student->student_number;
-            $attendance->time_in = Carbon::now();
-            $attendance->status = 'present';
-            $attendance->save();
-        }
-
         return response()->json([
-            'message' => 'Time in recorded and SMS sent',
+            'message' => 'Time in recorded successfully',
             'attendance' => $attendance
         ], 201);
     }

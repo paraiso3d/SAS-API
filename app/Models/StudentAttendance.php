@@ -12,6 +12,7 @@ class StudentAttendance extends Model
     protected $table = 'student_attendance';
 
     protected $fillable = [
+        'fingerprint_id',
         'rfid_tag_number',
         'student_number',
         'time_in',

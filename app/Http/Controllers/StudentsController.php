@@ -30,13 +30,14 @@ class StudentsController extends Controller
         return response()->json($student, 200);
     }
 
-    
+
     /**
      * Create a new student record.
      */
     public function createStudent(Request $request)
     {
         $validated = $request->validate([
+            'fingerprint_id' => 'nullable|string|max:250|unique:students,fingerprint_id',
             'rfid_tag_number' => 'nullable|string|max:250',
             'student_number' => 'required|string|max:50|unique:students,student_number',
             'student_status' => 'required|string|max:50',
