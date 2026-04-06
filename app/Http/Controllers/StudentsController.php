@@ -34,7 +34,7 @@ class StudentsController extends Controller
     public function setFingerprint(Request $request)
     {
         $validated = $request->validate([
-            'fingerprint_id' => 'required|string|max:250|unique:fingerprints,fingerprint_id'
+            'fingerprint_id' => 'required|string|unique:fingerprints,fingerprint_id'
         ]);
 
         $fingerprint = Fingerprint::create([
