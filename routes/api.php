@@ -38,3 +38,6 @@ Route::post('/attendance/time-in', [StudentAttendanceController::class, 'timeIn'
 Route::post('/attendance/time-out', [StudentAttendanceController::class, 'timeOut']);
 Route::get('/attendance/{rfid_tag_number}', [StudentAttendanceController::class, 'getAttendanceByRfid']);
 Route::get('/attendance/today', [StudentAttendanceController::class, 'getTodayAttendance']);
+
+//Fingerprint test
+Route::post('/set-fingerprint', [StudentsController::class, 'setFingerprint']);
