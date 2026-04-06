@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Students;
 use Illuminate\Http\Request;
+use App\Models\Fingerprint;
 
 class StudentsController extends Controller
 {
@@ -28,6 +29,22 @@ class StudentsController extends Controller
         }
 
         return response()->json($student, 200);
+    }
+
+    public function setFingerprint(Request $request)
+    {
+        $validated = $request->validate([
+            'fingerprint_id' => 'required|string|max:250|unique:fingerprints,fingerprint_id'
+        ]);
+
+        $fingerprint = Fingerprint::create([
+            'fingerprint_id' => $validated['fingerprint_id']
+        ]);
+
+        return response()->json([
+            'message' => 'Fingerprint saved successfully',
+            'data' => $fingerprint
+        ], 201);
     }
 
 
