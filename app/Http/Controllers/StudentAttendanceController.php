@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 
 class StudentAttendanceController extends Controller
 {
+
     /**
      * Time in a student.
      */
