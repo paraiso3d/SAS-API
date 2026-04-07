@@ -18,36 +18,29 @@ class StudentsController extends Controller
     public function verifyFingerprint(Request $request)
     {
         $request->validate([
-            'fingerprint_sample' => 'required',
-            'student_templates' => 'required|array', // must be an array
+            'fingerprint_sample' => 'required|string',
+            'student_templates' => 'nullable|array',
         ]);
-
-        $sample = base64_encode($request->fingerprint_sample);
-
-        $templates = $request->student_templates;
-
-        // Ensure it's always an array (in case only one object is sent)
-        if (!is_array($templates)) {
-            $templates = [$templates];
-        }
-
-        foreach ($templates as $template) {
-            if (!isset($template['fingerprint_template'])) continue;
-
-            if (FingerprintSDK::compare($request->fingerprint_sample, $template['fingerprint_template'])) {
+        $sample = $request->fingerprint_sample; // already Base64 from frontend
+        // Fetch fingerprints and student info
+        $fingerprints = Fingerprint::with('student')->get();
+        foreach ($fingerprints as $fingerprint) {
+            $storedTemplate = $fingerprint->fingerprint_template;
+            // Use SDK for proper comparison
+            if (FingerprintSDK::compare($sample, $storedTemplate)) {
                 return response()->json([
                     'matched_student' => [
-                        'student_number' => $template['student_number'] ?? null,
-                        'student_id' => $template['student_id'] ?? null,
+                        'student_number' => $fingerprint->student->student_number,
+                        'student_id' => $fingerprint->student->id,
                     ]
                 ], 200);
             }
         }
-
         return response()->json([
             'message' => 'Fingerprint not recognized'
         ], 404);
     }
+
 
     public function getStudentTemplates()
     {
@@ -105,55 +98,89 @@ class StudentsController extends Controller
      * Create a new student record.
      */
     public function createStudent(Request $request)
+
     {
+
         $validated = $request->validate([
+
             'fingerprint_id' => 'required|string',
+
             'rfid_tag_number' => 'nullable|string|max:250',
+
             'student_number' => 'required|string|max:50|unique:students,student_number',
+
             'student_status' => 'required|string|max:50',
+
             'is_active' => 'nullable|boolean',
+
             'course_name' => 'required|string|max:255',
+
             'section_name' => 'required|string|max:255',
+
             'school_year' => 'required|string|max:20',
+
             'semester' => 'required|string|max:50',
+
             'first_name' => 'required|string|max:100',
+
             'middle_name' => 'nullable|string|max:100',
+
             'last_name' => 'required|string|max:100',
+
             'gender' => 'required|string|max:20',
+
             'birthdate' => 'required|date',
+
             'email' => 'required|email|max:255|unique:students,email',
+
             'contact_number' => 'required|string|max:50',
+
             'guardian_contact_number' => 'required|string|max:50',
+
         ]);
 
         $fingerprintRaw = $validated['fingerprint_id'];
 
-        // ✅ Basic validation (you can keep or simplify this)
+        // Validate incoming fingerprint (basic check)
+
         if (!FingerprintSDK::isValidScan($fingerprintRaw)) {
+
             return response()->json([
+
                 'message' => 'Invalid fingerprint scan. Please try again.'
+
             ], 422);
         }
 
-        // 🔥 IMPORTANT: store in SAME FORMAT as verify (base64)
-        $encodedTemplate = base64_encode($fingerprintRaw);
+        // Create template using SDK (for real matching later)
 
-        // Remove fingerprint from students table
+        $template = FingerprintSDK::createTemplate($fingerprintRaw);
+
+        // Remove fingerprint from main student data
+
         unset($validated['fingerprint_id']);
 
         $student = Students::create($validated);
 
-        // Save to fingerprints table
+        // Save fingerprint template
+
         Fingerprint::create([
+
             'student_id' => $student->id,
-            'fingerprint_template' => $encodedTemplate,
+
+            'fingerprint_template' => $template,
+
         ]);
 
         return response()->json([
+
             'message' => 'Student created successfully',
+
             'student' => $student
+
         ], 201);
     }
+
 
     /**
      * Update an existing student record.
