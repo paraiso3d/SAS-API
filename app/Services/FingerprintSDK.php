@@ -5,28 +5,29 @@ namespace App\Services;
 class FingerprintSDK
 {
     /**
-     * Convert raw scan to a stored template
+     * Convert incoming scan to a stored template
      */
     public static function createTemplate(string $rawScan): string
     {
-        // For now just return the raw scan
-        // Later, you can integrate the actual DigitalPersona SDK logic
-        return base64_encode($rawScan); // optional encoding
+        // Currently we just store the string as-is (already Base64 from front-end)
+        return $rawScan;
     }
 
     /**
-     * Validate a raw fingerprint scan
+     * Basic validation of scan
      */
     public static function isValidScan(string $rawScan): bool
     {
-        return !empty($rawScan); // simple check
+        return !empty($rawScan);
     }
 
     /**
-     * Compare a raw scan with a saved template
+     * Compare incoming sample with stored template
+     * 🔥 In real implementation, use DigitalPersona SDK fuzzy matching
      */
-    public static function compare(string $rawScan, string $template): bool
+    public static function compare(string $sample, string $template): bool
     {
-        return base64_encode($rawScan) === $template; // match encoded string
+        // Temporary: exact string match (works with your current front-end)
+        return $sample === $template;
     }
 }
