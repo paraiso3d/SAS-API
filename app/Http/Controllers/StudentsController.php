@@ -72,7 +72,7 @@ class StudentsController extends Controller
     public function createStudent(Request $request)
     {
         $validated = $request->validate([
-            'fingerprint_id' => 'required|string', // this is the raw scan from frontend
+            'fingerprint_id' => 'required|string', 
             'rfid_tag_number' => 'nullable|string|max:250',
             'student_number' => 'required|string|max:50|unique:students,student_number',
             'student_status' => 'required|string|max:50',
@@ -91,7 +91,7 @@ class StudentsController extends Controller
             'guardian_contact_number' => 'required|string|max:50',
         ]);
 
-        // 🔥 Verification logic
+        //  Verification logic
         $fingerprintRaw = $validated['fingerprint_id'];
 
         // Example: Call a hypothetical SDK function to verify if the scan is valid
