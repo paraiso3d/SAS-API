@@ -22,22 +22,36 @@ class StudentsController extends Controller
             'student_templates' => 'required|array',
         ]);
 
-        $sample = $request->fingerprint_sample;
-        // Use DigitalPersona SDK to compare sample with each template
+        // 🔥 Encode incoming sample to match stored templates (Base64)
+        $sample = base64_encode($request->fingerprint_sample);
+
         foreach ($request->student_templates as $template) {
-            if (FingerprintSDK::compare($sample, $template['fingerprint_template'])) {
+
+            // ✅ Prevent undefined array errors
+            if (
+                !isset($template['fingerprint_template']) ||
+                !isset($template['student_number'])
+            ) {
+                continue;
+            }
+
+            $storedTemplate = $template['fingerprint_template'];
+
+            // 🔥 Compare
+            if (FingerprintSDK::compare($sample, $storedTemplate)) {
                 return response()->json([
                     'matched_student' => [
                         'student_number' => $template['student_number'],
-                        'fingerprint_template' => $template['fingerprint_template']
+                        'fingerprint_template' => $storedTemplate
                     ]
                 ], 200);
             }
         }
 
-        return response()->json(['message' => 'Fingerprint not recognized'], 404);
+        return response()->json([
+            'message' => 'Fingerprint not recognized'
+        ], 404);
     }
-
     public function getStudentTemplates()
     {
         $templates = Fingerprint::with('student:id,student_number')
