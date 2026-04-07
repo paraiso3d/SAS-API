@@ -40,14 +40,17 @@ class StudentsController extends Controller
 
     public function getStudentTemplates()
     {
-        $students = Students::whereNotNull('fingerprint_id')
-            ->where('is_archived', 0)
-            ->get([
-                'student_number',
-                'fingerprint_id'
-            ]);
+        $templates = Fingerprint::with('student:id,student_number')
+            ->get()
+            ->map(function ($f) {
+                return [
+                    'student_id' => $f->student_id,
+                    'student_number' => $f->student->student_number,
+                    'fingerprint_template' => $f->fingerprint_template,
+                ];
+            });
 
-        return response()->json($students, 200);
+        return response()->json($templates, 200);
     }
 
     public function getAllStudents()
