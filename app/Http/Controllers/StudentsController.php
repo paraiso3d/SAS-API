@@ -124,21 +124,25 @@ class StudentsController extends Controller
 
         $fingerprintRaw = $validated['fingerprint_id'];
 
-        // Validate raw scan
+        // ✅ Basic validation (you can keep or simplify this)
         if (!FingerprintSDK::isValidScan($fingerprintRaw)) {
             return response()->json([
                 'message' => 'Invalid fingerprint scan. Please try again.'
             ], 422);
         }
 
-        // Create the student (without fingerprint_id in students table)
-        unset($validated['fingerprint_id']); // remove before saving
+        // 🔥 IMPORTANT: store in SAME FORMAT as verify (base64)
+        $encodedTemplate = base64_encode($fingerprintRaw);
+
+        // Remove fingerprint from students table
+        unset($validated['fingerprint_id']);
+
         $student = Students::create($validated);
 
-        // Generate and save fingerprint template in separate table
+        // Save to fingerprints table
         Fingerprint::create([
             'student_id' => $student->id,
-            'fingerprint_template' => FingerprintSDK::createTemplate($fingerprintRaw),
+            'fingerprint_template' => $encodedTemplate,
         ]);
 
         return response()->json([
