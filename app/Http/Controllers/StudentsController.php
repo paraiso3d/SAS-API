@@ -18,7 +18,7 @@ class StudentsController extends Controller
     public function verifyFingerprint(Request $request)
     {
         $request->validate([
-            'fingerprint_sample' => 'required|string',
+            'fingerprint_sample' => 'required',
             'student_templates' => 'required|array',
         ]);
 
