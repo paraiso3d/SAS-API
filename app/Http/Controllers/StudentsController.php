@@ -72,7 +72,7 @@ class StudentsController extends Controller
     public function createStudent(Request $request)
     {
         $validated = $request->validate([
-            'fingerprint_id' => 'required|string', 
+            'fingerprint_id' => 'required|string', // raw scan
             'rfid_tag_number' => 'nullable|string|max:250',
             'student_number' => 'required|string|max:50|unique:students,student_number',
             'student_status' => 'required|string|max:50',
@@ -91,20 +91,24 @@ class StudentsController extends Controller
             'guardian_contact_number' => 'required|string|max:50',
         ]);
 
-        //  Verification logic
         $fingerprintRaw = $validated['fingerprint_id'];
 
-        // Example: Call a hypothetical SDK function to verify if the scan is valid
+        // Validate raw scan
         if (!FingerprintSDK::isValidScan($fingerprintRaw)) {
             return response()->json([
                 'message' => 'Invalid fingerprint scan. Please try again.'
             ], 422);
         }
 
-        // Optionally: you could generate a proper template from this scan
-        $validated['fingerprint_id'] = FingerprintSDK::createTemplate($fingerprintRaw);
-
+        // Create the student (without fingerprint_id in students table)
+        unset($validated['fingerprint_id']); // remove before saving
         $student = Students::create($validated);
+
+        // Generate and save fingerprint template in separate table
+        Fingerprint::create([
+            'student_id' => $student->id,
+            'fingerprint_template' => FingerprintSDK::createTemplate($fingerprintRaw),
+        ]);
 
         return response()->json([
             'message' => 'Student created successfully',
