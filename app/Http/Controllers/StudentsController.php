@@ -15,7 +15,28 @@ class StudentsController extends Controller
     /**
      * Retrieve all active (non-archived) student records.
      */
+    public function verifyFingerprint(Request $request)
+    {
+        $request->validate([
+            'fingerprint_sample' => 'required|string',
+            'student_templates' => 'required|array',
+        ]);
 
+        $sample = $request->fingerprint_sample;
+        // Use DigitalPersona SDK to compare sample with each template
+        foreach ($request->student_templates as $template) {
+            if (FingerprintSDK::compare($sample, $template['fingerprint_template'])) {
+                return response()->json([
+                    'matched_student' => [
+                        'student_number' => $template['student_number'],
+                        'fingerprint_template' => $template['fingerprint_template']
+                    ]
+                ], 200);
+            }
+        }
+
+        return response()->json(['message' => 'Fingerprint not recognized'], 404);
+    }
 
     public function getStudentTemplates()
     {
