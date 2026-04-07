@@ -19,23 +19,26 @@ class StudentsController extends Controller
     {
         $request->validate([
             'fingerprint_sample' => 'required',
+            'student_templates' => 'required|array', // must be an array
         ]);
 
-        // 🔥 Encode incoming sample (same as stored)
         $sample = base64_encode($request->fingerprint_sample);
 
-        // 🔥 Get all fingerprints with student relation
-        $fingerprints = Fingerprint::with('student')->get();
+        $templates = $request->student_templates;
 
-        foreach ($fingerprints as $fingerprint) {
+        // Ensure it's always an array (in case only one object is sent)
+        if (!is_array($templates)) {
+            $templates = [$templates];
+        }
 
-            $storedTemplate = $fingerprint->fingerprint_template;
+        foreach ($templates as $template) {
+            if (!isset($template['fingerprint_template'])) continue;
 
-            if (FingerprintSDK::compare($sample, $storedTemplate)) {
+            if (FingerprintSDK::compare($request->fingerprint_sample, $template['fingerprint_template'])) {
                 return response()->json([
                     'matched_student' => [
-                        'student_number' => $fingerprint->student->student_number,
-                        'student_id' => $fingerprint->student->id,
+                        'student_number' => $template['student_number'] ?? null,
+                        'student_id' => $template['student_id'] ?? null,
                     ]
                 ], 200);
             }
@@ -45,6 +48,7 @@ class StudentsController extends Controller
             'message' => 'Fingerprint not recognized'
         ], 404);
     }
+
     public function getStudentTemplates()
     {
         $templates = Fingerprint::with('student:id,student_number')
