@@ -19,7 +19,7 @@ class StudentsController extends Controller
     {
         $request->validate([
             'fingerprint_sample' => 'required',
-            'student_templates' => 'required|array',
+            // 'student_templates' => 'required|array',
         ]);
 
         // 🔥 Encode incoming sample to match stored templates (Base64)
