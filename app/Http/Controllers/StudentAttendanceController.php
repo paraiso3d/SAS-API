@@ -29,6 +29,7 @@ class StudentAttendanceController extends Controller
         if (!$student) {
             Log::warning('Student not found for Fingerprint');
             return response()->json([
+                'isSuccess' => false,
                 'message' => 'Fingerprint not recognized'
             ], 404);
         }
