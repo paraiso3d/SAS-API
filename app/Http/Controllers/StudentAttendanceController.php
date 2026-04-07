@@ -16,33 +16,32 @@ class StudentAttendanceController extends Controller
     public function timeIn(Request $request)
     {
         $request->validate([
-            'fingerprint_id' => 'required|string|max:250',
+            'fingerprint_id' => 'required|string',
         ]);
 
         $fingerprintId = $request->fingerprint_id;
 
-        // Find student using fingerprint ID
+        // Find student
         $student = Students::where('fingerprint_id', $fingerprintId)
             ->where('is_archived', 0)
             ->first();
 
         if (!$student) {
-            Log::warning('Student not found for Fingerprint ID: ' . $fingerprintId);
+            Log::warning('Student not found for Fingerprint');
             return response()->json([
-                'message' => 'Student not found'
+                'message' => 'Fingerprint not recognized'
             ], 404);
         }
 
         $today = now()->toDateString();
 
-        // Get or create attendance
+        // 🔥 FIX: use student_number, NOT fingerprint_id
         $attendance = StudentAttendance::firstOrCreate(
             [
-                'fingerprint_id' => $fingerprintId,
+                'student_number' => $student->student_number,
                 'attendance_date' => $today
             ],
             [
-                'student_number' => $student->student_number,
                 'status' => 'present'
             ]
         );
@@ -55,7 +54,7 @@ class StudentAttendanceController extends Controller
             ], 200);
         }
 
-        // Record time in
+        // Time in
         $attendance->update([
             'time_in' => now()
         ]);
