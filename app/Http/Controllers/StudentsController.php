@@ -11,6 +11,20 @@ class StudentsController extends Controller
     /**
      * Retrieve all active (non-archived) student records.
      */
+
+
+    public function getStudentTemplates()
+    {
+        $students = Students::whereNotNull('fingerprint_id')
+            ->where('is_archived', 0)
+            ->get([
+                'student_number',
+                'fingerprint_id'
+            ]);
+
+        return response()->json($students, 200);
+    }
+
     public function getAllStudents()
     {
         $students = Students::where('is_archived', 0)->get();

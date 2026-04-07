@@ -32,6 +32,7 @@ Route::get('/students/{id}', [StudentsController::class, 'getStudentById']);
 Route::post('create/students', [StudentsController::class, 'createStudent']);
 Route::post('update/students/{id}', [StudentsController::class, 'updateStudent']);
 Route::post('archive/students/{id}', [StudentsController::class, 'archiveStudent']);
+Route::get('/student-templates', [StudentsController::class, 'getStudentTemplates']);
 
 //Student Attendance Routes
 Route::post('/attendance/time-in', [StudentAttendanceController::class, 'timeIn']);
