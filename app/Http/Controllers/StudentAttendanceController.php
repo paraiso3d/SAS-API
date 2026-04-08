@@ -59,6 +59,10 @@ class StudentAttendanceController extends Controller
 
         Log::info('RFID TAP RECEIVED');
 
+        // 🇵🇭 Use Philippine Time
+        $now = Carbon::now('Asia/Manila');
+        $today = $now->toDateString();
+
         // 🔥 Find student
         $student = Students::where('rfid_tag_number', $request->rfid_tag_number)
             ->where('is_archived', 0)
@@ -70,8 +74,6 @@ class StudentAttendanceController extends Controller
                 'message' => 'RFID not recognized'
             ], 404);
         }
-
-        $today = now()->toDateString();
 
         // 🔥 Get today's attendance
         $attendance = StudentAttendance::where('student_number', $student->student_number)
@@ -85,7 +87,7 @@ class StudentAttendanceController extends Controller
             $attendance = StudentAttendance::create([
                 'student_number' => $student->student_number,
                 'attendance_date' => $today,
-                'time_in' => now(),
+                'time_in' => $now,
                 'status' => 'present'
             ]);
 
@@ -97,11 +99,11 @@ class StudentAttendanceController extends Controller
         // =========================
         elseif (!$attendance->time_out) {
 
-            // ⏱️ Enforce 5-minute rule
-            $timeIn = Carbon::parse($attendance->time_in);
+            // ⏱️ Enforce 5-minute rule using PH time
+            $timeIn = Carbon::parse($attendance->time_in)->setTimezone('Asia/Manila');
 
-            if ($timeIn->diffInMinutes(now()) < 5) {
-                $remaining = 5 - $timeIn->diffInMinutes(now());
+            if ($timeIn->diffInMinutes($now) < 5) {
+                $remaining = 5 - $timeIn->diffInMinutes($now);
 
                 return response()->json([
                     'isSuccess' => false,
@@ -110,7 +112,7 @@ class StudentAttendanceController extends Controller
             }
 
             $attendance->update([
-                'time_out' => now()
+                'time_out' => $now
             ]);
 
             $action = 'TIME OUT';
@@ -138,7 +140,7 @@ class StudentAttendanceController extends Controller
                 $number = '63' . substr($number, 1);
             }
 
-            $message = "Student {$student->student_number} {$action} at " . now()->format('h:i A');
+            $message = "Student {$student->student_number} {$action} at " . $now->format('h:i A');
 
             Http::timeout(5)->post('https://semaphore.co/api/v4/messages', [
                 'apikey' => env('SEMAPHORE_API_KEY'),
