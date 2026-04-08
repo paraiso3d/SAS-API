@@ -26,7 +26,23 @@ class StudentAttendanceController extends Controller
         $recentAttendance = StudentAttendance::with('student')
             ->orderBy('created_at', 'desc')
             ->take(4)
-            ->get();
+            ->get()
+            ->map(function ($attendance) {
+                return [
+                    'id' => $attendance->id,
+                    'student_number' => $attendance->student_number,
+                    'attendance_date' => $attendance->attendance_date,
+                    'time_in' => $attendance->time_in,
+                    'time_out' => $attendance->time_out,
+
+                    // 🔥 Add names here
+                    'first_name' => $attendance->student->first_name ?? null,
+                    'last_name' => $attendance->student->last_name ?? null,
+
+                    // optional (cleaner)
+                    'full_name' => ($attendance->student->first_name ?? '') . ' ' . ($attendance->student->last_name ?? ''),
+                ];
+            });
 
         return response()->json($recentAttendance, 200);
     }
