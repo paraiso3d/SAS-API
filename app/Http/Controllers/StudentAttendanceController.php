@@ -10,6 +10,10 @@ use Illuminate\Support\Facades\Log;
 use App\Models\Fingerprint;
 use App\Models\ApiLog;
 use App\Services\FingerprintSDK;
+use App\Models\Session;
+use App\Models\User;
+use Illuminate\Support\Facades\Http;
+
 
 class StudentAttendanceController extends Controller
 {
@@ -17,39 +21,38 @@ class StudentAttendanceController extends Controller
     /**
      * Time in a student.
      */
+
     public function timeIn(Request $request)
     {
+        Log::info('STEP 1: timeIn hit');
+
         $request->validate([
-            'fingerprint_scan' => 'required|string', // raw scan from frontend
+            'rfid_tag_number' => 'required|string',
         ]);
 
-        $scan = $request->fingerprint_scan;
+        // 🔥 Find student via RFID
+        $matchedStudent = Students::where('rfid_tag_number', $request->rfid_tag_number)
+            ->where('is_archived', 0)
+            ->first();
 
-        // Get all fingerprints with related students who are not archived
-        $fingerprints = Fingerprint::with('student')
-            ->whereHas('student', fn($q) => $q->where('is_archived', 0))
-            ->get();
-
-        $matchedStudent = null;
-
-        // Loop through templates to find a match
-        foreach ($fingerprints as $fingerprint) {
-            if (FingerprintSDK::match($scan, $fingerprint->fingerprint_template)) {
-                $matchedStudent = $fingerprint->student;
-                break;
-            }
-        }
+        Log::info('STEP 2: student query executed');
 
         if (!$matchedStudent) {
+            Log::info('STEP 2.1: student NOT found');
+
             return response()->json([
                 'isSuccess' => false,
-                'message' => 'Fingerprint not recognized'
+                'message' => 'RFID not recognized'
             ], 404);
         }
 
+        Log::info('STEP 3: student found', [
+            'student_number' => $matchedStudent->student_number
+        ]);
+
         $today = now()->toDateString();
 
-        // Create or get attendance
+        // ✅ Attendance
         $attendance = StudentAttendance::firstOrCreate(
             [
                 'student_number' => $matchedStudent->student_number,
@@ -60,8 +63,12 @@ class StudentAttendanceController extends Controller
             ]
         );
 
-        // Already timed in
+        Log::info('STEP 4: attendance created/fetched');
+
+        // 🚫 Prevent double time-in
         if ($attendance->time_in) {
+            Log::info('STEP 4.1: already timed in');
+
             return response()->json([
                 'isSuccess' => true,
                 'message' => 'Student already timed in',
@@ -69,10 +76,50 @@ class StudentAttendanceController extends Controller
             ], 200);
         }
 
-        // Record time in
+        // ✅ Record time in
         $attendance->update([
             'time_in' => now()
         ]);
+
+        Log::info('STEP 5: time_in updated');
+
+        // 🔥 SEND SMS (Semaphore)
+        try {
+            $number = $matchedStudent->contact_number;
+
+            Log::info('STEP 6: preparing SMS', ['raw_number' => $number]);
+
+            if ($number) {
+
+                // Normalize → 639XXXXXXXXX
+                if (str_starts_with($number, '09')) {
+                    $number = '63' . substr($number, 1);
+                }
+
+                $message = "Student {$matchedStudent->student_number} has timed in at " . now()->format('h:i A');
+
+                Log::info('STEP 7: sending SMS', [
+                    'number' => $number,
+                    'message' => $message
+                ]);
+
+                $response = Http::timeout(5)->post('https://semaphore.co/api/v4/messages', [
+                    'apikey' => env('SEMAPHORE_API_KEY'),
+                    'number' => $number,
+                    'message' => $message,
+                ]);;
+
+                Log::info('STEP 8: SMS response', [
+                    'body' => $response->body()
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('STEP ERROR: SMS failed', [
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        Log::info('STEP 9: finished');
 
         return response()->json([
             'isSuccess' => true,
@@ -80,7 +127,6 @@ class StudentAttendanceController extends Controller
             'attendance' => $attendance
         ], 201);
     }
-
 
     /**
      * Time out a student.

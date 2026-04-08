@@ -100,82 +100,31 @@ class StudentsController extends Controller
     public function createStudent(Request $request)
 
     {
-
         $validated = $request->validate([
 
-            'fingerprint_id' => 'required|string',
-
+            'fingerprint_id' => 'nullable|string',
             'rfid_tag_number' => 'nullable|string|max:250',
-
             'student_number' => 'required|string|max:50|unique:students,student_number',
-
             'student_status' => 'required|string|max:50',
-
             'is_active' => 'nullable|boolean',
-
             'course_name' => 'required|string|max:255',
-
             'section_name' => 'required|string|max:255',
-
             'school_year' => 'required|string|max:20',
-
             'semester' => 'required|string|max:50',
-
             'first_name' => 'required|string|max:100',
-
             'middle_name' => 'nullable|string|max:100',
-
             'last_name' => 'required|string|max:100',
-
             'gender' => 'required|string|max:20',
-
             'birthdate' => 'required|date',
-
             'email' => 'required|email|max:255|unique:students,email',
-
             'contact_number' => 'required|string|max:50',
-
             'guardian_contact_number' => 'required|string|max:50',
 
         ]);
 
-        $fingerprintRaw = $validated['fingerprint_id'];
-
-        // Validate incoming fingerprint (basic check)
-
-        if (!FingerprintSDK::isValidScan($fingerprintRaw)) {
-
-            return response()->json([
-
-                'message' => 'Invalid fingerprint scan. Please try again.'
-
-            ], 422);
-        }
-
-        // Create template using SDK (for real matching later)
-
-        $template = FingerprintSDK::createTemplate($fingerprintRaw);
-
-        // Remove fingerprint from main student data
-
-        unset($validated['fingerprint_id']);
-
         $student = Students::create($validated);
-
-        // Save fingerprint template
-
-        Fingerprint::create([
-
-            'student_id' => $student->id,
-
-            'fingerprint_template' => $template,
-
-        ]);
-
         return response()->json([
-
             'message' => 'Student created successfully',
-
             'student' => $student
 
         ], 201);
