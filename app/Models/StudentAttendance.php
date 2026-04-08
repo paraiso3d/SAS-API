@@ -21,5 +21,11 @@ class StudentAttendance extends Model
         'status'
     ];
 
+    public function student()
+    {
+        return $this->belongsTo(Students::class);
+    }
+
+
     public $timestamps = true;
 }
