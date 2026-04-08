@@ -72,7 +72,11 @@ class StudentAttendanceController extends Controller
             return response()->json([
                 'isSuccess' => true,
                 'message' => 'Student already timed in',
-                'attendance' => $attendance
+                'attendance' => $attendance,
+                'student' => [
+                    'first_name' => $matchedStudent->first_name,
+                    'last_name' => $matchedStudent->last_name,
+                ]
             ], 200);
         }
 
