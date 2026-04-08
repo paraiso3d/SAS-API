@@ -52,7 +52,7 @@ class StudentAttendanceController extends Controller
 
         $today = now()->toDateString();
 
-        // ✅ Attendance
+        //  Attendance
         $attendance = StudentAttendance::firstOrCreate(
             [
                 'student_number' => $matchedStudent->student_number,
