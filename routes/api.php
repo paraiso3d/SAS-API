@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\AuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -36,10 +37,15 @@ Route::get('/student-templates', [StudentsController::class, 'getStudentTemplate
 Route::post('/verify-fingerprint', [StudentsController::class, 'verifyFingerprint']);
 //Student Attendance Routes
 Route::get('/attendance/recent', [StudentAttendanceController::class, 'getrecentattendance']);
-Route::post('/attendance/time-in', [StudentAttendanceController::class, 'timeIn']);
+Route::post('/attendance/time-in', [StudentAttendanceController::class, 'tapRFID']);
 Route::post('/attendance/time-out', [StudentAttendanceController::class, 'timeOut']);
 Route::get('/attendance/{rfid_tag_number}', [StudentAttendanceController::class, 'getAttendanceByRfid']);
 Route::get('/attendance/today', [StudentAttendanceController::class, 'getTodayAttendance']);
 
 //Fingerprint test
 Route::post('/set-fingerprint', [StudentsController::class, 'setFingerprint']);
+
+
+//Announcements Routes
+Route::get('/announcements', [AnnouncementController::class, 'getannouncements']);
+Route::post('/announcements', [AnnouncementController::class, 'createAnnouncement']);
