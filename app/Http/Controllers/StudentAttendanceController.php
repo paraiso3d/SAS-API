@@ -18,6 +18,19 @@ use Illuminate\Support\Facades\Http;
 class StudentAttendanceController extends Controller
 {
 
+
+
+
+    public function getrecentattendance()
+    {
+        $recentAttendance = StudentAttendance::with('student')
+            ->orderBy('created_at', 'desc')
+            ->take(4)
+            ->get();
+
+        return response()->json($recentAttendance, 200);
+    }
+
     /**
      * Time in a student.
      */

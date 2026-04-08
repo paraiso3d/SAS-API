@@ -35,6 +35,7 @@ Route::post('archive/students/{id}', [StudentsController::class, 'archiveStudent
 Route::get('/student-templates', [StudentsController::class, 'getStudentTemplates']);
 Route::post('/verify-fingerprint', [StudentsController::class, 'verifyFingerprint']);
 //Student Attendance Routes
+Route::get('/attendance/recent', [StudentAttendanceController::class, 'getrecentattendance']);
 Route::post('/attendance/time-in', [StudentAttendanceController::class, 'timeIn']);
 Route::post('/attendance/time-out', [StudentAttendanceController::class, 'timeOut']);
 Route::get('/attendance/{rfid_tag_number}', [StudentAttendanceController::class, 'getAttendanceByRfid']);
