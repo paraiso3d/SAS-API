@@ -65,7 +65,7 @@ class StudentAttendanceController extends Controller
 
         Log::info('STEP 4: attendance created/fetched');
 
-        // 🚫 Prevent double time-in
+        // Prevent double time-in
         if ($attendance->time_in) {
             Log::info('STEP 4.1: already timed in');
 
@@ -76,7 +76,7 @@ class StudentAttendanceController extends Controller
             ], 200);
         }
 
-        // ✅ Record time in
+        // Record time in
         $attendance->update([
             'time_in' => now()
         ]);
@@ -124,7 +124,11 @@ class StudentAttendanceController extends Controller
         return response()->json([
             'isSuccess' => true,
             'message' => 'Time in recorded successfully',
-            'attendance' => $attendance
+            'attendance' => $attendance,
+            'student' => [
+                'first_name' => $matchedStudent->first_name,
+                'last_name' => $matchedStudent->last_name,
+            ]
         ], 201);
     }
 
