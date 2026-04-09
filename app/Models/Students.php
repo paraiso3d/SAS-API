@@ -12,6 +12,7 @@ class Students extends Model
     protected $table = 'students';
 
     protected $fillable = [
+        'profile_picture',
         'fingerprint_id',
         'rfid_tag_number',
         'student_number',

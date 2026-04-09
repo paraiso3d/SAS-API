@@ -181,6 +181,9 @@ class StudentAttendanceController extends Controller
             'student' => [
                 'first_name' => $student->first_name,
                 'last_name' => $student->last_name,
+                'profile_picture_url' => $student->profile_picture
+                    ? asset($student->profile_picture)
+                    : null,
             ],
             'action' => $action
         ], 200);
@@ -205,5 +208,37 @@ class StudentAttendanceController extends Controller
         $attendance = StudentAttendance::where('attendance_date', $today)->get();
 
         return response()->json($attendance, 200);
+    }
+
+
+    //HEL:PERS
+    private function saveFileToPublic($fileInput, $prefix)
+    {
+        $directory = public_path('sas_files');
+        if (!file_exists($directory)) {
+            mkdir($directory, 0755, true);
+        }
+
+        $saveSingleFile = function ($file) use ($directory, $prefix) {
+            $filename = $prefix . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            $file->move($directory, $filename);
+            return 'sas_files/' . $filename;
+        };
+
+        //  Case 1: Multiple files
+        if (is_array($fileInput)) {
+            $paths = [];
+            foreach ($fileInput as $file) {
+                $paths[] = $saveSingleFile($file);
+            }
+            return $paths; // Return array of paths
+        }
+
+        // Case 2: Single file
+        if ($fileInput instanceof \Illuminate\Http\UploadedFile) {
+            return $saveSingleFile($fileInput);
+        }
+
+        return null;
     }
 }

@@ -42,24 +42,35 @@ class StudentsController extends Controller
     }
 
 
-    public function getStudentTemplates()
-    {
-        $templates = Fingerprint::with('student:id,student_number')
-            ->get()
-            ->map(function ($f) {
-                return [
-                    'student_id' => $f->student_id,
-                    'student_number' => $f->student->student_number,
-                    'fingerprint_template' => $f->fingerprint_template,
-                ];
-            });
+    // public function getStudentTemplates()
+    // {
+    //     $templates = Fingerprint::with('student:id,student_number')
+    //         ->get()
+    //         ->map(function ($f) {
+    //             return [
+    //                 'student_id' => $f->student_id,
+    //                 'student_number' => $f->student->student_number,
+    //                 'fingerprint_template' => $f->fingerprint_template,
+    //             ];
+    //         });
 
-        return response()->json($templates, 200);
-    }
+    //     return response()->json($templates, 200);
+    // }
 
     public function getAllStudents()
     {
         $students = Students::where('is_archived', 0)->get();
+
+        //  Attach full URL
+        $students->transform(function ($student) {
+            if ($student->profile_picture) {
+                $student->profile_picture_url = asset($student->profile_picture);
+            } else {
+                $student->profile_picture_url = null;
+            }
+            return $student;
+        });
+
         return response()->json($students, 200);
     }
 
@@ -98,10 +109,8 @@ class StudentsController extends Controller
      * Create a new student record.
      */
     public function createStudent(Request $request)
-
     {
         $validated = $request->validate([
-
             'fingerprint_id' => 'nullable|string',
             'rfid_tag_number' => 'nullable|string|max:250',
             'student_number' => 'required|string|max:50|unique:students,student_number',
@@ -120,13 +129,23 @@ class StudentsController extends Controller
             'contact_number' => 'required|string|max:50',
             'guardian_contact_number' => 'required|string|max:50',
 
+            // 🔥 FILE FIELD
+            'profile_picture' => 'nullable|image|mimes:jpg,jpeg,png|max:5120',
         ]);
 
+        // 🔥 HANDLE FILE
+        if ($request->hasFile('profile_picture')) {
+            $validated['profile_picture'] = $this->saveFileToPublic(
+                $request->file('profile_picture'),
+                'student'
+            );
+        }
+
         $student = Students::create($validated);
+
         return response()->json([
             'message' => 'Student created successfully',
             'student' => $student
-
         ], 201);
     }
 
@@ -136,13 +155,16 @@ class StudentsController extends Controller
      */
     public function updateStudent(Request $request, $id)
     {
-        $student = Students::where('id', $id)->where('is_archived', 0)->first();
+        $student = Students::where('id', $id)
+            ->where('is_archived', 0)
+            ->first();
 
         if (!$student) {
             return response()->json(['message' => 'Student not found or archived'], 404);
         }
 
         $validated = $request->validate([
+
             'rfid_tag_number' => 'nullable|string|max:250',
             'student_number' => 'required|string|max:50|unique:students,student_number,' . $id,
             'student_status' => 'required|string|max:50',
@@ -159,7 +181,24 @@ class StudentsController extends Controller
             'email' => 'required|email|max:255|unique:students,email,' . $id,
             'contact_number' => 'required|string|max:50',
             'guardian_contact_number' => 'required|string|max:50',
+
+            // 🔥 FILE FIELD
+            'profile_picture' => 'nullable|image|mimes:jpg,jpeg,png|max:5120',
         ]);
+
+        // 🔥 HANDLE FILE UPDATE
+        if ($request->hasFile('profile_picture')) {
+
+            // optional: delete old file
+            if ($student->profile_picture && file_exists(public_path($student->profile_picture))) {
+                unlink(public_path($student->profile_picture));
+            }
+
+            $validated['profile_picture'] = $this->saveFileToPublic(
+                $request->file('profile_picture'),
+                'student'
+            );
+        }
 
         $student->update($validated);
 
@@ -168,7 +207,6 @@ class StudentsController extends Controller
             'student' => $student
         ], 200);
     }
-
     /**
      * Archive a student record instead of deleting.
      */
@@ -185,5 +223,38 @@ class StudentsController extends Controller
         return response()->json([
             'message' => 'Student archived successfully'
         ], 200);
+    }
+
+
+
+    //HEL:PERS
+    private function saveFileToPublic($fileInput, $prefix)
+    {
+        $directory = public_path('sas_files');
+        if (!file_exists($directory)) {
+            mkdir($directory, 0755, true);
+        }
+
+        $saveSingleFile = function ($file) use ($directory, $prefix) {
+            $filename = $prefix . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            $file->move($directory, $filename);
+            return 'sas_files/' . $filename;
+        };
+
+        //  Case 1: Multiple files
+        if (is_array($fileInput)) {
+            $paths = [];
+            foreach ($fileInput as $file) {
+                $paths[] = $saveSingleFile($file);
+            }
+            return $paths; // Return array of paths
+        }
+
+        // Case 2: Single file
+        if ($fileInput instanceof \Illuminate\Http\UploadedFile) {
+            return $saveSingleFile($fileInput);
+        }
+
+        return null;
     }
 }
