@@ -137,48 +137,63 @@ class StudentAttendanceController extends Controller
         ]);
 
         // =========================
-        // 🔥 SMS (iTexMo)
+        // 🔥 SMS (iTexMo Broadcast API)
         // =========================
         try {
-
-            // 👤 Full name
             $fullName = "{$student->first_name} {$student->last_name}";
-
-            // 📚 Extra details
             $details = "{$student->course_name} - {$student->section_name}";
 
-            // 📱 Choose guardian number first
-            $number = $student->guardian_contact_number ?? $student->contact_number;
+            $number = $student->guardian_contact_number ?: $student->contact_number;
 
-            // Convert 09 → 639
-            if ($number && str_starts_with($number, '09')) {
-                $number = '63' . substr($number, 1);
-            }
-
-            // 🔥 Message
-            if ($action === 'TIME OUT') {
-                $message = "Notice: {$fullName} ({$student->student_number}) has TIMED OUT at "
-                    . $now->format('h:i A') . ". Course: {$details}.";
+            if (!$number) {
+                Log::warning("No contact number found for {$student->student_number}");
             } else {
-                $message = "Notice: {$fullName} ({$student->student_number}) has TIMED IN at "
-                    . $now->format('h:i A') . ". Course: {$details}.";
-            }
+                // Convert 09 → 639 & clean
+                $number = preg_replace('/^0/', '63', $number);
+                $number = preg_replace('/\D/', '', $number);
 
-            $response = Http::asForm()->post('https://www.itexmo.com/php_api/api.php', [
-                '1' => $number,
-                '2' => $message,
-                '3' => env('ITEXMO_API_CODE'),
-            ]);
+                // Compose message
+                $message = "Notice: {$fullName} ({$student->student_number}) has "
+                    . ($action === 'TIME OUT' ? "TIMED OUT" : "TIMED IN")
+                    . " at {$now->format('h:i A')}. Course: {$details}.";
 
-            if ($response->body() != "0") {
-                Log::error('iTexMo Error Code: ' . $response->body());
-            } else {
-                Log::info('SMS sent successfully');
+                Log::info("Sending iTexMo SMS to {$number}", ['message' => $message]);
+
+                // Prepare POST data
+                $payload = [
+                    "Email"     => env('ITEXMO_EMAIL'),     // Your iTexMo email
+                    "Password"  => env('ITEXMO_PASSWORD'),  // Your iTexMo password
+                    "ApiCode"   => env('ITEXMO_API_CODE'),  // Your API code
+                    "Recipients" => [$number],
+                    "Message"   => $message
+                ];
+
+                // cURL call to broadcast API
+                $ch = curl_init("https://api.itexmo.com/api/broadcast");
+                curl_setopt_array($ch, [
+                    CURLOPT_POST => true,
+                    CURLOPT_POSTFIELDS => json_encode($payload),
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HTTPHEADER => [
+                        "Content-Type: application/json",
+                        "Authorization: Basic " . base64_encode(env('ITEXMO_EMAIL') . ":" . env('ITEXMO_PASSWORD'))
+                    ],
+                    CURLOPT_TIMEOUT => 15
+                ]);
+
+                $curlResponse = curl_exec($ch);
+                $curlError = curl_error($ch);
+                curl_close($ch);
+
+                if ($curlError) {
+                    Log::error("iTexMo cURL Error: {$curlError}");
+                } else {
+                    Log::info("iTexMo API Response: {$curlResponse}");
+                }
             }
         } catch (\Exception $e) {
-            Log::error('SMS failed: ' . $e->getMessage());
+            Log::error("SMS sending failed: " . $e->getMessage());
         }
-
         return response()->json([
             'isSuccess' => true,
             'message' => $action . ' recorded successfully',
