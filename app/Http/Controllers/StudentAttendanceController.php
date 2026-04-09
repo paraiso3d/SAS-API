@@ -19,8 +19,6 @@ class StudentAttendanceController extends Controller
 {
 
 
-
-
     public function getrecentattendance()
     {
         $recentAttendance = StudentAttendance::with('student')
@@ -28,6 +26,9 @@ class StudentAttendanceController extends Controller
             ->take(4)
             ->get()
             ->map(function ($attendance) {
+
+                $student = $attendance->student;
+
                 return [
                     'id' => $attendance->id,
                     'student_number' => $attendance->student_number,
@@ -35,18 +36,22 @@ class StudentAttendanceController extends Controller
                     'time_in' => $attendance->time_in,
                     'time_out' => $attendance->time_out,
 
-                    // 🔥 Add names here
-                    'first_name' => $attendance->student->first_name ?? null,
-                    'last_name' => $attendance->student->last_name ?? null,
+                    // 👤 Names
+                    'first_name' => $student->first_name ?? null,
+                    'last_name' => $student->last_name ?? null,
 
-                    // optional (cleaner)
-                    'full_name' => ($attendance->student->first_name ?? '') . ' ' . ($attendance->student->last_name ?? ''),
+                    // 🔥 Full name
+                    'full_name' => trim(($student->first_name ?? '') . ' ' . ($student->last_name ?? '')),
+
+                    // 🖼️ Profile Image URL
+                    'profile_picture_url' => $student && $student->profile_picture
+                        ? asset($student->profile_picture)
+                        : null,
                 ];
             });
 
         return response()->json($recentAttendance, 200);
     }
-
     /**
      * Time in a student.
      */
