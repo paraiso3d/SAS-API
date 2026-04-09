@@ -88,42 +88,31 @@ class StudentAttendanceController extends Controller
         // TIME IN
         // =========================
         if (!$attendance) {
-
             $attendance = StudentAttendance::create([
                 'student_number' => $student->student_number,
                 'attendance_date' => $today,
                 'time_in' => $now,
                 'status' => 'present'
             ]);
-
             $action = 'TIME IN';
         }
-
         // =========================
         // TIME OUT
         // =========================
         elseif (!$attendance->time_out) {
-
             $timeIn = Carbon::parse($attendance->time_in)->setTimezone('Asia/Manila');
-
             if ($timeIn->diffInMinutes($now) < 5) {
                 $remaining = 5 - $timeIn->diffInMinutes($now);
-
                 return response()->json([
                     'isSuccess' => false,
                     'message' => "Please wait {$remaining} more minute(s) before timing out"
                 ], 429);
             }
-
-            $attendance->update([
-                'time_out' => $now
-            ]);
-
+            $attendance->update(['time_out' => $now]);
             $action = 'TIME OUT';
         }
-
         // =========================
-        // DONE
+        // Already done
         // =========================
         else {
             return response()->json([
@@ -132,9 +121,7 @@ class StudentAttendanceController extends Controller
             ], 200);
         }
 
-        Log::info("ACTION: $action", [
-            'student_number' => $student->student_number
-        ]);
+        Log::info("ACTION: $action", ['student_number' => $student->student_number]);
 
         // =========================
         // 🔥 SMS (iTexMo Broadcast API)
@@ -142,13 +129,10 @@ class StudentAttendanceController extends Controller
         try {
             $fullName = "{$student->first_name} {$student->last_name}";
             $details = "{$student->course_name} - {$student->section_name}";
-
             $number = $student->guardian_contact_number ?: $student->contact_number;
 
-            if (!$number) {
-                Log::warning("No contact number found for {$student->student_number}");
-            } else {
-                // Convert 09 → 639 & clean
+            if ($number) {
+                // Format number for Philippines
                 $number = preg_replace('/^0/', '63', $number);
                 $number = preg_replace('/\D/', '', $number);
 
@@ -157,27 +141,25 @@ class StudentAttendanceController extends Controller
                     . ($action === 'TIME OUT' ? "TIMED OUT" : "TIMED IN")
                     . " at {$now->format('h:i A')}. Course: {$details}.";
 
+                // Strip invalid GSM 7BIT characters
+                $message = preg_replace('/[^\x20-\x7E]/', '', $message);
+
                 Log::info("Sending iTexMo SMS to {$number}", ['message' => $message]);
 
-                // Prepare POST data
+                // Prepare form-encoded payload
                 $payload = [
-                    "Email"     => env('ITEXMO_EMAIL'),     // Your iTexMo email
-                    "Password"  => env('ITEXMO_PASSWORD'),  // Your iTexMo password
-                    "ApiCode"   => env('ITEXMO_API_CODE'),  // Your API code
-                    "Recipients" => [$number],
+                    "Email"     => env('ITEXMO_EMAIL'),
+                    "Password"  => env('ITEXMO_PASSWORD'),
+                    "ApiCode"   => env('ITEXMO_API_CODE'),
+                    "Recipients" => $number,
                     "Message"   => $message
                 ];
 
-                // cURL call to broadcast API
-                $ch = curl_init("https://api.itexmo.com/api/broadcast");
+                $ch = curl_init("https://api.itexmo.com/api/broadcast"); // note HTTP
                 curl_setopt_array($ch, [
                     CURLOPT_POST => true,
-                    CURLOPT_POSTFIELDS => json_encode($payload),
+                    CURLOPT_POSTFIELDS => http_build_query($payload), // form-encoded
                     CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_HTTPHEADER => [
-                        "Content-Type: application/json",
-                        "Authorization: Basic " . base64_encode(env('ITEXMO_EMAIL') . ":" . env('ITEXMO_PASSWORD'))
-                    ],
                     CURLOPT_TIMEOUT => 15
                 ]);
 
@@ -190,10 +172,13 @@ class StudentAttendanceController extends Controller
                 } else {
                     Log::info("iTexMo API Response: {$curlResponse}");
                 }
+            } else {
+                Log::warning("No contact number found for {$student->student_number}");
             }
         } catch (\Exception $e) {
             Log::error("SMS sending failed: " . $e->getMessage());
         }
+
         return response()->json([
             'isSuccess' => true,
             'message' => $action . ' recorded successfully',
@@ -217,6 +202,14 @@ class StudentAttendanceController extends Controller
         $attendance = StudentAttendance::where('rfid_tag_number', $rfid_tag_number)->get();
 
         return response()->json($attendance, 200);
+    }
+
+    //Get ALL attendances
+    public function getAttendaces()
+    {
+        $attendances = StudentAttendance::all();
+
+        return response()->json($attendances, 200);
     }
 
     /**
