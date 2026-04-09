@@ -59,7 +59,6 @@ class StudentAttendanceController extends Controller
 
         Log::info('RFID TAP RECEIVED');
 
-        // 🇵🇭 Use Philippine Time
         $now = Carbon::now('Asia/Manila');
         $today = $now->toDateString();
 
@@ -75,15 +74,16 @@ class StudentAttendanceController extends Controller
             ], 404);
         }
 
-        // 🔥 Get today's attendance
+        // 🔥 Get attendance
         $attendance = StudentAttendance::where('student_number', $student->student_number)
             ->where('attendance_date', $today)
             ->first();
 
         // =========================
-        // ✅ CASE 1: NO RECORD → TIME IN
+        // TIME IN
         // =========================
         if (!$attendance) {
+
             $attendance = StudentAttendance::create([
                 'student_number' => $student->student_number,
                 'attendance_date' => $today,
@@ -95,11 +95,10 @@ class StudentAttendanceController extends Controller
         }
 
         // =========================
-        // ✅ CASE 2: HAS TIME IN, NO TIME OUT → TIME OUT
+        // TIME OUT
         // =========================
         elseif (!$attendance->time_out) {
 
-            // ⏱️ Enforce 5-minute rule using PH time
             $timeIn = Carbon::parse($attendance->time_in)->setTimezone('Asia/Manila');
 
             if ($timeIn->diffInMinutes($now) < 5) {
@@ -119,7 +118,7 @@ class StudentAttendanceController extends Controller
         }
 
         // =========================
-        // ❌ CASE 3: ALREADY COMPLETED
+        // DONE
         // =========================
         else {
             return response()->json([
@@ -132,21 +131,45 @@ class StudentAttendanceController extends Controller
             'student_number' => $student->student_number
         ]);
 
-        // 🔥 OPTIONAL SMS (Semaphore)
+        // =========================
+        // 🔥 SMS (iTexMo)
+        // =========================
         try {
-            $number = $student->contact_number;
 
+            // 👤 Full name
+            $fullName = "{$student->first_name} {$student->last_name}";
+
+            // 📚 Extra details
+            $details = "{$student->course_name} - {$student->section_name}";
+
+            // 📱 Choose guardian number first
+            $number = $student->guardian_contact_number ?? $student->contact_number;
+
+            // Convert 09 → 639
             if ($number && str_starts_with($number, '09')) {
                 $number = '63' . substr($number, 1);
             }
 
-            $message = "Student {$student->student_number} {$action} at " . $now->format('h:i A');
+            // 🔥 Message
+            if ($action === 'TIME OUT') {
+                $message = "Notice: {$fullName} ({$student->student_number}) has TIMED OUT at "
+                    . $now->format('h:i A') . ". Course: {$details}.";
+            } else {
+                $message = "Notice: {$fullName} ({$student->student_number}) has TIMED IN at "
+                    . $now->format('h:i A') . ". Course: {$details}.";
+            }
 
-            Http::timeout(5)->post('https://semaphore.co/api/v4/messages', [
-                'apikey' => env('SEMAPHORE_API_KEY'),
-                'number' => $number,
-                'message' => $message,
+            $response = Http::asForm()->post('https://www.itexmo.com/php_api/api.php', [
+                '1' => $number,
+                '2' => $message,
+                '3' => env('ITEXMO_API_CODE'),
             ]);
+
+            if ($response->body() != "0") {
+                Log::error('iTexMo Error Code: ' . $response->body());
+            } else {
+                Log::info('SMS sent successfully');
+            }
         } catch (\Exception $e) {
             Log::error('SMS failed: ' . $e->getMessage());
         }
