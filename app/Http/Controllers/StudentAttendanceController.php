@@ -79,7 +79,7 @@ class StudentAttendanceController extends Controller
             ], 404);
         }
 
-        // 🔥 Get attendance
+        //  Get attendance
         $attendance = StudentAttendance::where('student_number', $student->student_number)
             ->where('attendance_date', $today)
             ->first();
@@ -124,7 +124,7 @@ class StudentAttendanceController extends Controller
         Log::info("ACTION: $action", ['student_number' => $student->student_number]);
 
         // =========================
-        // 🔥 SMS (iTexMo Broadcast API)
+        // SMS (iTexMo Broadcast API)
         // =========================
         try {
             $fullName = "{$student->first_name} {$student->last_name}";
