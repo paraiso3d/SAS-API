@@ -204,10 +204,9 @@ class StudentAttendanceController extends Controller
         return response()->json($attendance, 200);
     }
 
-    //Get ALL attendances
     public function getAttendaces()
     {
-        $attendances = StudentAttendance::all();
+        $attendances = StudentAttendance::with('student')->get();
 
         return response()->json($attendances, 200);
     }
