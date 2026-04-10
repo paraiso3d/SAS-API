@@ -111,6 +111,7 @@ class StudentAttendanceController extends Controller
                 ], 429);
             }
             $attendance->update(['time_out' => $now]);
+            $attendance->update(['status' => 'timed out']);
             $action = 'TIME OUT';
         }
         // =========================
