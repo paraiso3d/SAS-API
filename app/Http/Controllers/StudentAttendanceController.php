@@ -69,7 +69,7 @@ class StudentAttendanceController extends Controller
         $now = Carbon::now('Asia/Manila');
         $today = $now->toDateString();
 
-        // 🔥 Find student
+        // Find student
         $student = Students::where('rfid_tag_number', $request->rfid_tag_number)
             ->where('is_archived', 0)
             ->first();
@@ -198,7 +198,9 @@ class StudentAttendanceController extends Controller
             'action' => $action
         ], 200);
     }
+    
 
+    
     /**
      * Get attendance records by RFID tag number.
      */
