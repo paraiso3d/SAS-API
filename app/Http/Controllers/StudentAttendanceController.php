@@ -47,6 +47,8 @@ class StudentAttendanceController extends Controller
                     'profile_picture_url' => $student && $student->profile_picture
                         ? asset($student->profile_picture)
                         : null,
+                    'created_at' => $attendance->created_at,
+                    'updated_at' => $attendance->updated_at,
                 ];
             });
 
