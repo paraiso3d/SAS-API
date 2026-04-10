@@ -110,8 +110,10 @@ class StudentAttendanceController extends Controller
                     'message' => "Please wait {$remaining} more minute(s) before timing out"
                 ], 429);
             }
-            $attendance->update(['time_out' => $now]);
-            $attendance->update(['status' => 'timed out']);
+            $attendance->update([
+                'time_out' => $now,
+                'status' => 'Timed Out'
+            ]);
             $action = 'TIME OUT';
         }
         // =========================
