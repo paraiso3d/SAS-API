@@ -57,7 +57,8 @@ Route::get('/announcements', [AnnouncementController::class, 'getannouncements']
 Route::post('/announcements', [AnnouncementController::class, 'createAnnouncement']);
 
 //Employee Routes
-Route::get('/emplloyee/attendance', [EmployeeController::class, 'getemployeeAttendance']);
+Route::get('/employee/attendance', [EmployeeController::class, 'getEmployeeAttendance']);
+Route::get('/employees', [EmployeeController::class, 'getEmployeeList']);
 Route::post('/employee/create', [EmployeeController::class, 'createEmployee']);
 Route::post('/employee/update/{id}', [EmployeeController::class, 'updateEmployee']);
 Route::post('/employee/archive/{id}', [EmployeeController::class, 'archiveEmployee']);

@@ -20,6 +20,18 @@ class EmployeeController extends Controller
         ], 200);
     }
 
+
+    //Get Employee List
+    public function getEmployeeList()
+    {
+        $employees = Employee::where('is_archived', 0)->get();
+
+        return response()->json([
+            'message' => 'Employee List',
+            'data' => $employees
+        ], 200);
+    }
+
     // =========================
     // CREATE EMPLOYEE
     // =========================
