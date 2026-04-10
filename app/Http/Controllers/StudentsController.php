@@ -42,20 +42,6 @@ class StudentsController extends Controller
     }
 
 
-    // public function getStudentTemplates()
-    // {
-    //     $templates = Fingerprint::with('student:id,student_number')
-    //         ->get()
-    //         ->map(function ($f) {
-    //             return [
-    //                 'student_id' => $f->student_id,
-    //                 'student_number' => $f->student->student_number,
-    //                 'fingerprint_template' => $f->fingerprint_template,
-    //             ];
-    //         });
-
-    //     return response()->json($templates, 200);
-    // }
 
     public function getAllStudents()
     {

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\DashBoardController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\StudentsController;
@@ -19,6 +20,9 @@ use App\Http\Controllers\StudentAttendanceController;
 | is assigned the "api" middleware group. Enjoy building your API!
 |
 */
+
+//Dashboard Route
+Route::get('/dashboard', [DashBoardController::class, 'getDashboardData']);
 
 //Auth
 Route::post('/auth/create-admin', [AuthController::class, 'createAdmin']);
