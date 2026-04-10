@@ -10,24 +10,15 @@ class EmployeeController extends Controller
 {
 
     //Employee Attendace
-    public function employeeAttendance(Request $request)
+    public function getEmployeeAttendance(Request $request)
     {
-        $validated = $request->validate([
-            'employee_number' => 'required|string|exists:employees,employee_number',
-            'attendance_date' => 'required|date',
-            'time_in' => 'nullable|date_format:H:i:s',
-            'time_out' => 'nullable|date_format:H:i:s',
-            'status' => 'required|string|max:50'
-        ]);
-
-        $attendance = EmployeeAttendance::create($validated);
+        $employeeAttendance = EmployeeAttendance::with('employee')->get();
 
         return response()->json([
-            'message' => 'Employee attendance recorded successfully',
-            'attendance' => $attendance
-        ], 201);
+            'message' => 'Employee Attendance',
+            'data' => $employeeAttendance
+        ], 200);
     }
-
 
     // =========================
     // CREATE EMPLOYEE
