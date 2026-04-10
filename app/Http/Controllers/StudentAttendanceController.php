@@ -94,7 +94,7 @@ class StudentAttendanceController extends Controller
                 'student_number' => $student->student_number,
                 'attendance_date' => $today,
                 'time_in' => $now,
-                'status' => 'present'
+                'status' => 'Timed In'
             ]);
             $action = 'TIME IN';
         }
