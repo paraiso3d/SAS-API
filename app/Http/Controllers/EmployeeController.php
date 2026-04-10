@@ -4,9 +4,31 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Employee;
+use App\Models\EmployeeAttendance;
 
 class EmployeeController extends Controller
 {
+
+    //Employee Attendace
+    public function employeeAttendance(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_number' => 'required|string|exists:employees,employee_number',
+            'attendance_date' => 'required|date',
+            'time_in' => 'nullable|date_format:H:i:s',
+            'time_out' => 'nullable|date_format:H:i:s',
+            'status' => 'required|string|max:50'
+        ]);
+
+        $attendance = EmployeeAttendance::create($validated);
+
+        return response()->json([
+            'message' => 'Employee attendance recorded successfully',
+            'attendance' => $attendance
+        ], 201);
+    }
+
+
     // =========================
     // CREATE EMPLOYEE
     // =========================
