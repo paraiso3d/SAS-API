@@ -13,6 +13,8 @@ use App\Services\FingerprintSDK;
 use App\Models\Session;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
+use App\Models\Employee;
+use App\Models\EmployeeAttendance;
 
 
 class StudentAttendanceController extends Controller
@@ -69,138 +71,183 @@ class StudentAttendanceController extends Controller
         $now = Carbon::now('Asia/Manila');
         $today = $now->toDateString();
 
-        // Find student
+        // =========================
+        // 🔍 CHECK STUDENT FIRST
+        // =========================
         $student = Students::where('rfid_tag_number', $request->rfid_tag_number)
             ->where('is_archived', 0)
             ->first();
 
-        if (!$student) {
-            return response()->json([
-                'isSuccess' => false,
-                'message' => 'RFID not recognized'
-            ], 404);
-        }
+        if ($student) {
 
-        //  Get attendance
-        $attendance = StudentAttendance::where('student_number', $student->student_number)
-            ->where('attendance_date', $today)
-            ->first();
+            $attendance = StudentAttendance::where('student_number', $student->student_number)
+                ->where('attendance_date', $today)
+                ->first();
 
-        // =========================
-        // TIME IN
-        // =========================
-        if (!$attendance) {
-            $attendance = StudentAttendance::create([
-                'student_number' => $student->student_number,
-                'attendance_date' => $today,
-                'time_in' => $now,
-                'status' => 'Timed In'
-            ]);
-            $action = 'TIME IN';
-        }
-        // =========================
-        // TIME OUT
-        // =========================
-        elseif (!$attendance->time_out) {
-            $timeIn = Carbon::parse($attendance->time_in)->setTimezone('Asia/Manila');
-            if ($timeIn->diffInMinutes($now) < 5) {
-                $remaining = 5 - $timeIn->diffInMinutes($now);
+            // TIME IN
+            if (!$attendance) {
+                $attendance = StudentAttendance::create([
+                    'student_number' => $student->student_number,
+                    'attendance_date' => $today,
+                    'time_in' => $now,
+                    'status' => 'Timed In'
+                ]);
+                $action = 'TIME IN';
+            }
+            // TIME OUT
+            elseif (!$attendance->time_out) {
+                $timeIn = Carbon::parse($attendance->time_in)->setTimezone('Asia/Manila');
+
+                if ($timeIn->diffInMinutes($now) < 5) {
+                    $remaining = 5 - $timeIn->diffInMinutes($now);
+
+                    return response()->json([
+                        'isSuccess' => false,
+                        'message' => "Please wait {$remaining} more minute(s) before timing out"
+                    ], 429);
+                }
+
+                $attendance->update([
+                    'time_out' => $now,
+                    'status' => 'Timed Out'
+                ]);
+
+                $action = 'TIME OUT';
+            }
+            // DONE
+            else {
                 return response()->json([
                     'isSuccess' => false,
-                    'message' => "Please wait {$remaining} more minute(s) before timing out"
-                ], 429);
+                    'message' => 'Already timed in and out today'
+                ], 200);
             }
-            $attendance->update([
-                'time_out' => $now,
-                'status' => 'Timed Out'
-            ]);
-            $action = 'TIME OUT';
-        }
-        // =========================
-        // Already done
-        // =========================
-        else {
+
+            Log::info("ACTION: $action", ['student_number' => $student->student_number]);
+
+            // =========================
+            // 📩 SMS (ONLY FOR STUDENT)
+            // =========================
+            try {
+                $fullName = "{$student->first_name} {$student->last_name}";
+                $details = "{$student->course_name} - {$student->section_name}";
+                $number = $student->guardian_contact_number ?: $student->contact_number;
+
+                if ($number) {
+                    $number = preg_replace('/^0/', '63', $number);
+                    $number = preg_replace('/\D/', '', $number);
+
+                    $message = "Notice: {$fullName} ({$student->student_number}) has "
+                        . ($action === 'TIME OUT' ? "TIMED OUT" : "TIMED IN")
+                        . " at {$now->format('h:i A')}. Course: {$details}.";
+
+                    $message = preg_replace('/[^\x20-\x7E]/', '', $message);
+
+                    Log::info("Sending iTexMo SMS to {$number}", ['message' => $message]);
+
+                    $payload = [
+                        "Email"     => env('ITEXMO_EMAIL'),
+                        "Password"  => env('ITEXMO_PASSWORD'),
+                        "ApiCode"   => env('ITEXMO_API_CODE'),
+                        "Recipients" => $number,
+                        "Message"   => $message
+                    ];
+
+                    $ch = curl_init("https://api.itexmo.com/api/broadcast");
+                    curl_setopt_array($ch, [
+                        CURLOPT_POST => true,
+                        CURLOPT_POSTFIELDS => http_build_query($payload),
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_TIMEOUT => 15
+                    ]);
+
+                    $curlResponse = curl_exec($ch);
+                    $curlError = curl_error($ch);
+                    curl_close($ch);
+
+                    if ($curlError) {
+                        Log::error("iTexMo cURL Error: {$curlError}");
+                    } else {
+                        Log::info("iTexMo API Response: {$curlResponse}");
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error("SMS sending failed: " . $e->getMessage());
+            }
+
             return response()->json([
-                'isSuccess' => false,
-                'message' => 'Already timed in and out today'
+                'type' => 'student',
+                'isSuccess' => true,
+                'message' => $action . ' recorded successfully',
+                'attendance' => $attendance,
+                'name' => $student->first_name . ' ' . $student->last_name
             ], 200);
         }
 
-        Log::info("ACTION: $action", ['student_number' => $student->student_number]);
-
         // =========================
-        // SMS (iTexMo Broadcast API)
+        // 🔍 CHECK EMPLOYEE
         // =========================
-        try {
-            $fullName = "{$student->first_name} {$student->last_name}";
-            $details = "{$student->course_name} - {$student->section_name}";
-            $number = $student->guardian_contact_number ?: $student->contact_number;
+        $employee = Employee::where('rfid_tag_number', $request->rfid_tag_number)
+            ->where('is_archived', 0)
+            ->first();
 
-            if ($number) {
-                // Format number for Philippines
-                $number = preg_replace('/^0/', '63', $number);
-                $number = preg_replace('/\D/', '', $number);
+        if ($employee) {
 
-                // Compose message
-                $message = "Notice: {$fullName} ({$student->student_number}) has "
-                    . ($action === 'TIME OUT' ? "TIMED OUT" : "TIMED IN")
-                    . " at {$now->format('h:i A')}. Course: {$details}.";
+            $attendance = EmployeeAttendance::where('employee_number', $employee->employee_number)
+                ->where('attendance_date', $today)
+                ->first();
 
-                // Strip invalid GSM 7BIT characters
-                $message = preg_replace('/[^\x20-\x7E]/', '', $message);
-
-                Log::info("Sending iTexMo SMS to {$number}", ['message' => $message]);
-
-                // Prepare form-encoded payload
-                $payload = [
-                    "Email"     => env('ITEXMO_EMAIL'),
-                    "Password"  => env('ITEXMO_PASSWORD'),
-                    "ApiCode"   => env('ITEXMO_API_CODE'),
-                    "Recipients" => $number,
-                    "Message"   => $message
-                ];
-
-                $ch = curl_init("https://api.itexmo.com/api/broadcast"); // note HTTP
-                curl_setopt_array($ch, [
-                    CURLOPT_POST => true,
-                    CURLOPT_POSTFIELDS => http_build_query($payload), // form-encoded
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_TIMEOUT => 15
+            // TIME IN
+            if (!$attendance) {
+                $attendance = EmployeeAttendance::create([
+                    'employee_number' => $employee->employee_number,
+                    'attendance_date' => $today,
+                    'time_in' => $now,
+                    'status' => 'Timed In'
                 ]);
-
-                $curlResponse = curl_exec($ch);
-                $curlError = curl_error($ch);
-                curl_close($ch);
-
-                if ($curlError) {
-                    Log::error("iTexMo cURL Error: {$curlError}");
-                } else {
-                    Log::info("iTexMo API Response: {$curlResponse}");
-                }
-            } else {
-                Log::warning("No contact number found for {$student->student_number}");
+                $action = 'TIME IN';
             }
-        } catch (\Exception $e) {
-            Log::error("SMS sending failed: " . $e->getMessage());
+            // TIME OUT
+            elseif (!$attendance->time_out) {
+                $attendance->update([
+                    'time_out' => $now,
+                    'status' => 'Timed Out'
+                ]);
+                $action = 'TIME OUT';
+            }
+            // DONE
+            else {
+                return response()->json([
+                    'isSuccess' => false,
+                    'message' => 'Already timed in and out today'
+                ], 200);
+            }
+
+            Log::info("EMPLOYEE ACTION: $action", [
+                'employee_number' => $employee->employee_number
+            ]);
+
+            // ❌ NO SMS HERE (as requested)
+
+            return response()->json([
+                'type' => 'employee',
+                'isSuccess' => true,
+                'message' => $action . ' recorded successfully',
+                'attendance' => $attendance,
+                'name' => $employee->first_name . ' ' . $employee->last_name
+            ], 200);
         }
 
+        // =========================
+        // ❌ NOT FOUND
+        // =========================
         return response()->json([
-            'isSuccess' => true,
-            'message' => $action . ' recorded successfully',
-            'attendance' => $attendance,
-            'student' => [
-                'first_name' => $student->first_name,
-                'last_name' => $student->last_name,
-                'profile_picture_url' => $student->profile_picture
-                    ? asset($student->profile_picture)
-                    : null,
-            ],
-            'action' => $action
-        ], 200);
+            'isSuccess' => false,
+            'message' => 'RFID not recognized'
+        ], 404);
     }
-    
 
-    
+
+
     /**
      * Get attendance records by RFID tag number.
      */
