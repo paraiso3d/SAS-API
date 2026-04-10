@@ -15,6 +15,7 @@ class EmployeeController extends Controller
         $employeeAttendance = EmployeeAttendance::with('employee')->get();
 
         return response()->json([
+            'isSuccess' => true,
             'message' => 'Employee Attendance',
             'data' => $employeeAttendance
         ], 200);
