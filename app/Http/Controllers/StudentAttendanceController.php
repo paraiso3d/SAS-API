@@ -23,7 +23,8 @@ class StudentAttendanceController extends Controller
 
     public function getrecentattendance()
     {
-        $recentAttendance = StudentAttendance::with('student')
+        // STUDENT ATTENDANCE
+        $recentStudentAttendance = StudentAttendance::with('student')
             ->orderBy('created_at', 'desc')
             ->take(4)
             ->get()
@@ -32,29 +33,47 @@ class StudentAttendanceController extends Controller
                 $student = $attendance->student;
 
                 return [
+                    'type' => 'student',
                     'id' => $attendance->id,
                     'student_number' => $attendance->student_number,
                     'attendance_date' => $attendance->attendance_date,
                     'time_in' => $attendance->time_in,
                     'time_out' => $attendance->time_out,
 
-                    //  Names
                     'first_name' => $student->first_name ?? null,
                     'last_name' => $student->last_name ?? null,
-
-                    //  Full name
                     'full_name' => trim(($student->first_name ?? '') . ' ' . ($student->last_name ?? '')),
 
-                    // Profile Image URL
                     'profile_picture_url' => $student && $student->profile_picture
                         ? asset($student->profile_picture)
                         : null,
+
                     'created_at' => $attendance->created_at,
-                    'updated_at' => $attendance->updated_at,
                 ];
             });
 
-        return response()->json($recentAttendance, 200);
+        // EMPLOYEE ATTENDANCE
+        $recentEmployeeAttendance = EmployeeAttendance::orderBy('created_at', 'desc')
+            ->take(4)
+            ->get()
+            ->map(function ($attendance) {
+
+                return [
+                    'type' => 'employee',
+                    'id' => $attendance->id,
+                    'employee_number' => $attendance->employee_number,
+                    'attendance_date' => $attendance->attendance_date,
+                    'time_in' => $attendance->time_in,
+                    'time_out' => $attendance->time_out,
+                    'status' => $attendance->status,
+                    'created_at' => $attendance->created_at,
+                ];
+            });
+
+        return response()->json([
+            'students' => $recentStudentAttendance,
+            'employees' => $recentEmployeeAttendance
+        ], 200);
     }
     /**
      * Time in a student.
