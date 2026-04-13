@@ -72,7 +72,7 @@ class StudentAttendanceController extends Controller
         $today = $now->toDateString();
 
         // =========================
-        // 🔍 CHECK STUDENT FIRST
+        // CHECK STUDENT FIRST
         // =========================
         $student = Students::where('rfid_tag_number', $request->rfid_tag_number)
             ->where('is_archived', 0)
@@ -125,7 +125,7 @@ class StudentAttendanceController extends Controller
             Log::info("ACTION: $action", ['student_number' => $student->student_number]);
 
             // =========================
-            // 📩 SMS (ONLY FOR STUDENT)
+            // SMS (ONLY FOR STUDENT)
             // =========================
             try {
                 $fullName = "{$student->first_name} {$student->last_name}";
@@ -184,7 +184,7 @@ class StudentAttendanceController extends Controller
         }
 
         // =========================
-        // 🔍 CHECK EMPLOYEE
+        //  CHECK EMPLOYEE
         // =========================
         $employee = Employee::where('rfid_tag_number', $request->rfid_tag_number)
             ->where('is_archived', 0)

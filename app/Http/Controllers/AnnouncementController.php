@@ -27,6 +27,31 @@ class AnnouncementController extends Controller
         ], 201);
     }
 
+
+    public function updateAnnouncement(Request $request, $id)
+    {
+        $request->validate([
+            'content' => 'sometimes|string',
+            'is_active' => 'nullable|boolean'
+        ]);
+
+        $announcement = Announcements::find($id);
+
+        if (!$announcement) {
+            return response()->json(['message' => 'Announcement not found'], 404);
+        }
+
+        $announcement->update([
+            'content' => $request->content,
+            'is_active' => $request->is_active ?? $announcement->is_active
+        ]);
+
+        return response()->json([
+            'message' => 'Announcement updated successfully',
+            'data' => $announcement
+        ], 200);
+    }
+
     // ✅ Get all announcements
     public function getannouncements()
     {
