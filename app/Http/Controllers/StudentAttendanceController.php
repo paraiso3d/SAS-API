@@ -258,13 +258,54 @@ class StudentAttendanceController extends Controller
         return response()->json($attendance, 200);
     }
 
-    public function getAttendaces()
+    public function getAttendaces(Request $request)
     {
-        $attendances = StudentAttendance::with('student')->get();
+        $query = StudentAttendance::with('student');
 
-        return response()->json($attendances, 200);
+        //  FILTERS
+
+        // direct column (no need whereHas)
+        if ($request->filled('student_number')) {
+            $query->where('student_number', 'like', '%' . $request->student_number . '%');
+        }
+
+        // use attendance_date instead of created_at
+        if ($request->filled('date')) {
+            $query->whereDate('attendance_date', $request->date);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        //  OPTIONAL: date range (way more useful)
+        if ($request->filled('date_from') && $request->filled('date_to')) {
+            $query->whereBetween('attendance_date', [
+                $request->date_from,
+                $request->date_to
+            ]);
+        }
+
+        // SORT (latest first by default)
+        $query->orderBy('attendance_date', 'desc');
+
+        //  PAGINATION (body-based)
+        $perPage = $request->input('per_page', 10);
+        $page = $request->input('page', 1);
+
+        $attendances = $query->paginate($perPage, ['*'], 'page', $page);
+
+        return response()->json([
+            'message' => 'Student Attendance List',
+            'data' => $attendances->items(),
+            'pagination' => [
+                'current_page' => $attendances->currentPage(),
+                'last_page' => $attendances->lastPage(),
+                'per_page' => $attendances->perPage(),
+                'total' => $attendances->total(),
+            ]
+        ], 200);
     }
-
     /**
      * View today's attendance records.
      */
