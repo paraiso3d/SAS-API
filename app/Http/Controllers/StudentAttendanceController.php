@@ -157,6 +157,7 @@ class StudentAttendanceController extends Controller
                 $number = $student->guardian_contact_number ?: $student->contact_number;
 
                 if ($number) {
+                    // Format number to 639XXXXXXXXX
                     $number = preg_replace('/^0/', '63', $number);
                     $number = preg_replace('/\D/', '', $number);
 
@@ -164,38 +165,22 @@ class StudentAttendanceController extends Controller
                         . ($action === 'TIME OUT' ? "TIMED OUT" : "TIMED IN")
                         . " at {$now->format('h:i A')}. Course: {$details}.";
 
-                    $message = preg_replace('/[^\x20-\x7E]/', '', $message);
+                    Log::info("Sending Semaphore SMS to {$number}", ['message' => $message]);
 
-                    Log::info("Sending iTexMo SMS to {$number}", ['message' => $message]);
-
-                    $payload = [
-                        "Email"     => env('ITEXMO_EMAIL'),
-                        "Password"  => env('ITEXMO_PASSWORD'),
-                        "ApiCode"   => env('ITEXMO_API_CODE'),
-                        "Recipients" => $number,
-                        "Message"   => $message
-                    ];
-
-                    $ch = curl_init("https://api.itexmo.com/api/broadcast");
-                    curl_setopt_array($ch, [
-                        CURLOPT_POST => true,
-                        CURLOPT_POSTFIELDS => http_build_query($payload),
-                        CURLOPT_RETURNTRANSFER => true,
-                        CURLOPT_TIMEOUT => 15
+                    $response = Http::asForm()->post('https://semaphore.co/api/v4/messages', [
+                        'apikey' => env('SEMAPHORE_API_KEY'),
+                        'number' => $number,
+                        'message' => $message,
+                        'sendername' => env('SEMAPHORE_SENDER_NAME') // optional
                     ]);
 
-                    $curlResponse = curl_exec($ch);
-                    $curlError = curl_error($ch);
-                    curl_close($ch);
-
-                    if ($curlError) {
-                        Log::error("iTexMo cURL Error: {$curlError}");
-                    } else {
-                        Log::info("iTexMo API Response: {$curlResponse}");
-                    }
+                    Log::info("Semaphore Response", [
+                        'status' => $response->status(),
+                        'body' => $response->body()
+                    ]);
                 }
             } catch (\Exception $e) {
-                Log::error("SMS sending failed: " . $e->getMessage());
+                Log::error("Semaphore SMS failed: " . $e->getMessage());
             }
 
             return response()->json([
