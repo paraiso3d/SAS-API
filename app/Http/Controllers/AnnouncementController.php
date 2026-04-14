@@ -52,8 +52,15 @@ class AnnouncementController extends Controller
         ], 200);
     }
 
-    // ✅ Get all announcements
+    // Get all announcements
     public function getannouncements()
+    {
+        $announcements = Announcements::latest()->where('is_active', 1)->get();
+
+        return response()->json($announcements, 200);
+    }
+
+    public function getannouncementsAdmin()
     {
         $announcements = Announcements::latest()->where('is_archived', 0)->get();
 
