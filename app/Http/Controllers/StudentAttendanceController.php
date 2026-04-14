@@ -232,10 +232,23 @@ class StudentAttendanceController extends Controller
             }
             // TIME OUT
             elseif (!$attendance->time_out) {
+
+                $timeIn = Carbon::parse($attendance->time_in)->setTimezone('Asia/Manila');
+
+                if ($timeIn->diffInMinutes($now) < 5) {
+                    $remaining = 5 - $timeIn->diffInMinutes($now);
+
+                    return response()->json([
+                        'isSuccess' => false,
+                        'message' => "Please wait {$remaining} more minute(s) before timing out"
+                    ], 429);
+                }
+
                 $attendance->update([
                     'time_out' => $now,
                     'status' => 'Timed Out'
                 ]);
+
                 $action = 'TIME OUT';
             }
             // DONE
