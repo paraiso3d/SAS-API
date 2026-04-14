@@ -56,6 +56,7 @@ Route::post('/set-fingerprint', [StudentsController::class, 'setFingerprint']);
 Route::get('/announcements', [AnnouncementController::class, 'getannouncements']);
 Route::post('/announcements', [AnnouncementController::class, 'createAnnouncement']);
 Route::post('/announcements/update/{id}', [AnnouncementController::class, 'updateAnnouncement']);
+Route::get('/announcements/admin', [AnnouncementController::class, 'getannouncementsAdmin']);
 
 //Employee Routes
 Route::get('/employee/attendance', [EmployeeController::class, 'getEmployeeAttendance']);
