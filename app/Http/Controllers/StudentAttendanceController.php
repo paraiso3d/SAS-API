@@ -21,10 +21,14 @@ class StudentAttendanceController extends Controller
 {
 
 
+
     public function getrecentattendance()
     {
+        $today = Carbon::today()->toDateString();
+
         // STUDENT ATTENDANCE
         $recentStudentAttendance = StudentAttendance::with('student')
+            ->whereDate('attendance_date', $today)
             ->orderBy('created_at', 'desc')
             ->take(4)
             ->get()
@@ -53,7 +57,8 @@ class StudentAttendanceController extends Controller
             });
 
         // EMPLOYEE ATTENDANCE
-        $recentEmployeeAttendance = EmployeeAttendance::orderBy('created_at', 'desc')
+        $recentEmployeeAttendance = EmployeeAttendance::whereDate('attendance_date', $today)
+            ->orderBy('created_at', 'desc')
             ->take(4)
             ->get()
             ->map(function ($attendance) {
