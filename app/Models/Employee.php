@@ -26,4 +26,9 @@ class Employee extends Model
         'is_active',
         'is_archived'
     ];
+
+    public function employee_attendances()
+    {
+        return $this->hasMany(EmployeeAttendance::class);
+    }
 }

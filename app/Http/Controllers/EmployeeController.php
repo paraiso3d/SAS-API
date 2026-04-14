@@ -12,7 +12,36 @@ class EmployeeController extends Controller
     //Employee Attendace
     public function getEmployeeAttendance(Request $request)
     {
-        $employeeAttendance = EmployeeAttendance::with('employee')->get();
+        $employeeAttendance = EmployeeAttendance::with('employee')
+            ->get()
+            ->map(function ($attendance) {
+
+                $employee = $attendance->employee;
+
+                return [
+                    'id' => $attendance->id,
+                    'employee_number' => $attendance->employee_number,
+                    'attendance_date' => $attendance->attendance_date,
+                    'time_in' => $attendance->time_in,
+                    'time_out' => $attendance->time_out,
+                    'status' => $attendance->status,
+
+                    // 🔥 Employee Info
+                    'first_name' => $employee->first_name ?? null,
+                    'middle_name' => $employee->middle_name ?? null,
+                    'last_name' => $employee->last_name ?? null,
+
+                    'full_name' => $employee
+                        ? trim($employee->first_name . ' ' . ($employee->middle_name ? $employee->middle_name . ' ' : '') . $employee->last_name)
+                        : null,
+
+                    'profile_picture_url' => $employee && $employee->profile_picture
+                        ? asset($employee->profile_picture)
+                        : null,
+
+                    'created_at' => $attendance->created_at,
+                ];
+            });
 
         return response()->json([
             'isSuccess' => true,
