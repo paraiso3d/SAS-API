@@ -10,6 +10,7 @@ class Announcements extends Model
     use HasFactory;
     protected $fillable = [
         'content',
-        'is_active'
+        'is_active',
+        'is_archived'
     ];
 }

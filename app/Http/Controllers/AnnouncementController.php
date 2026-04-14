@@ -55,7 +55,7 @@ class AnnouncementController extends Controller
     // ✅ Get all announcements
     public function getannouncements()
     {
-        $announcements = Announcements::latest()->where('is_active', 1)->get();
+        $announcements = Announcements::latest()->where('is_archived', 0)->get();
 
         return response()->json($announcements, 200);
     }
