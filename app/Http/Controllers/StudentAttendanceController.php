@@ -138,13 +138,6 @@ class StudentAttendanceController extends Controller
 
                 $action = 'TIME OUT';
             }
-            // DONE
-            else {
-                return response()->json([
-                    'isSuccess' => false,
-                    'message' => 'Already timed in and out today'
-                ], 200);
-            }
 
             Log::info("ACTION: $action", ['student_number' => $student->student_number]);
 
@@ -236,19 +229,10 @@ class StudentAttendanceController extends Controller
 
                 $action = 'TIME OUT';
             }
-            // DONE
-            else {
-                return response()->json([
-                    'isSuccess' => false,
-                    'message' => 'Already timed in and out today'
-                ], 200);
-            }
 
             Log::info("EMPLOYEE ACTION: $action", [
                 'employee_number' => $employee->employee_number
             ]);
-
-            // ❌ NO SMS HERE (as requested)
 
             return response()->json([
                 'type' => 'employee',
