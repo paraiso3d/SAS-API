@@ -104,33 +104,26 @@ class StudentAttendanceController extends Controller
 
         if ($student) {
 
+            // GET LATEST RECORD TODAY
             $attendance = StudentAttendance::where('student_number', $student->student_number)
                 ->where('attendance_date', $today)
+                ->latest()
                 ->first();
 
-            // TIME IN
-            if (!$attendance) {
+            // IF NO RECORD OR LAST IS COMPLETE → NEW TIME IN
+            if (!$attendance || $attendance->time_out) {
+
                 $attendance = StudentAttendance::create([
                     'student_number' => $student->student_number,
                     'attendance_date' => $today,
                     'time_in' => $now,
                     'status' => 'Timed In'
                 ]);
+
                 $action = 'TIME IN';
             }
-            // TIME OUT
-            elseif (!$attendance->time_out) {
-
-                $timeIn = Carbon::parse($attendance->time_in)->setTimezone('Asia/Manila');
-
-                if ($timeIn->diffInMinutes($now) < 5) {
-                    $remaining = 5 - $timeIn->diffInMinutes($now);
-
-                    return response()->json([
-                        'isSuccess' => false,
-                        'message' => "Please wait {$remaining} more minute(s) before timing out"
-                    ], 429);
-                }
+            // LAST RECORD HAS NO TIME OUT → TIME OUT
+            else {
 
                 $attendance->update([
                     'time_out' => $now,
@@ -139,10 +132,11 @@ class StudentAttendanceController extends Controller
 
                 $action = 'TIME OUT';
             }
+
             Log::info("ACTION: $action", ['student_number' => $student->student_number]);
 
             // =========================
-            // SMS (ONLY FOR STUDENT)
+            // SMS
             // =========================
             try {
                 $fullName = "{$student->first_name} {$student->last_name}";
@@ -157,28 +151,21 @@ class StudentAttendanceController extends Controller
                         . ($action === 'TIME OUT' ? "TIMED OUT" : "TIMED IN")
                         . " at {$now->format('h:i A')}. Course: {$details}.";
 
-                    Log::info("Sending Semaphore SMS to {$number}", ['message' => $message]);
-
-                    $response = Http::asForm()->post('https://semaphore.co/api/v4/messages', [
+                    Http::asForm()->post('https://semaphore.co/api/v4/messages', [
                         'apikey' => env('SEMAPHORE_API_KEY'),
                         'number' => $number,
                         'message' => $message,
                         'sendername' => env('SEMAPHORE_SENDER_NAME')
                     ]);
-
-                    Log::info("Semaphore Response", [
-                        'status' => $response->status(),
-                        'body' => $response->body()
-                    ]);
                 }
             } catch (\Exception $e) {
-                Log::error("Semaphore SMS failed: " . $e->getMessage());
+                Log::error("SMS failed: " . $e->getMessage());
             }
 
             return response()->json([
                 'type' => 'student',
                 'isSuccess' => true,
-                'message' => $action . ' recorded successfully',
+                'message' => $action . ' recorded',
                 'attendance' => $attendance,
                 'name' => $student->first_name . ' ' . $student->last_name
             ], 200);
@@ -195,31 +182,20 @@ class StudentAttendanceController extends Controller
 
             $attendance = EmployeeAttendance::where('employee_number', $employee->employee_number)
                 ->where('attendance_date', $today)
+                ->latest()
                 ->first();
 
-            // TIME IN
-            if (!$attendance) {
+            if (!$attendance || $attendance->time_out) {
+
                 $attendance = EmployeeAttendance::create([
                     'employee_number' => $employee->employee_number,
                     'attendance_date' => $today,
                     'time_in' => $now,
                     'status' => 'Timed In'
                 ]);
+
                 $action = 'TIME IN';
-            }
-            // TIME OUT
-            elseif (!$attendance->time_out) {
-
-                $timeIn = Carbon::parse($attendance->time_in)->setTimezone('Asia/Manila');
-
-                if ($timeIn->diffInMinutes($now) < 5) {
-                    $remaining = 5 - $timeIn->diffInMinutes($now);
-
-                    return response()->json([
-                        'isSuccess' => false,
-                        'message' => "Please wait {$remaining} more minute(s) before timing out"
-                    ], 429);
-                }
+            } else {
 
                 $attendance->update([
                     'time_out' => $now,
@@ -228,6 +204,7 @@ class StudentAttendanceController extends Controller
 
                 $action = 'TIME OUT';
             }
+
             Log::info("EMPLOYEE ACTION: $action", [
                 'employee_number' => $employee->employee_number
             ]);
@@ -235,15 +212,12 @@ class StudentAttendanceController extends Controller
             return response()->json([
                 'type' => 'employee',
                 'isSuccess' => true,
-                'message' => $action . ' recorded successfully',
+                'message' => $action . ' recorded',
                 'attendance' => $attendance,
                 'name' => $employee->first_name . ' ' . $employee->last_name
             ], 200);
         }
 
-        // =========================
-        // NOT FOUND
-        // =========================
         return response()->json([
             'isSuccess' => false,
             'message' => 'RFID not recognized'
