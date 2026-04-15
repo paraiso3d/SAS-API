@@ -139,14 +139,6 @@ class StudentAttendanceController extends Controller
 
                 $action = 'TIME OUT';
             }
-            // ALREADY COMPLETED
-            else {
-                return response()->json([
-                    'isSuccess' => false,
-                    'message' => 'Already timed in and out for today'
-                ], 400);
-            }
-
             Log::info("ACTION: $action", ['student_number' => $student->student_number]);
 
             // =========================
@@ -236,14 +228,6 @@ class StudentAttendanceController extends Controller
 
                 $action = 'TIME OUT';
             }
-            // ALREADY COMPLETED
-            else {
-                return response()->json([
-                    'isSuccess' => false,
-                    'message' => 'Already timed in and out for today'
-                ], 400);
-            }
-
             Log::info("EMPLOYEE ACTION: $action", [
                 'employee_number' => $employee->employee_number
             ]);
