@@ -104,13 +104,30 @@ class StudentAttendanceController extends Controller
 
         if ($student) {
 
-            // GET LATEST RECORD TODAY
             $attendance = StudentAttendance::where('student_number', $student->student_number)
                 ->where('attendance_date', $today)
                 ->latest()
                 ->first();
 
-            // IF NO RECORD OR LAST IS COMPLETE → NEW TIME IN
+            // ⛔ 5 MINUTE INTERVAL CHECK
+            if ($attendance) {
+                $lastTime = $attendance->time_out ?? $attendance->time_in;
+
+                if ($lastTime) {
+                    $lastTime = Carbon::parse($lastTime)->setTimezone('Asia/Manila');
+
+                    if ($lastTime->diffInMinutes($now) < 5) {
+                        $remaining = 5 - $lastTime->diffInMinutes($now);
+
+                        return response()->json([
+                            'isSuccess' => false,
+                            'message' => "Please wait {$remaining} more minute(s) before tapping again"
+                        ], 429);
+                    }
+                }
+            }
+
+            // TIME IN
             if (!$attendance || $attendance->time_out) {
 
                 $attendance = StudentAttendance::create([
@@ -122,7 +139,7 @@ class StudentAttendanceController extends Controller
 
                 $action = 'TIME IN';
             }
-            // LAST RECORD HAS NO TIME OUT → TIME OUT
+            // TIME OUT
             else {
 
                 $attendance->update([
@@ -185,6 +202,25 @@ class StudentAttendanceController extends Controller
                 ->latest()
                 ->first();
 
+            // ⛔ 5 MINUTE INTERVAL CHECK
+            if ($attendance) {
+                $lastTime = $attendance->time_out ?? $attendance->time_in;
+
+                if ($lastTime) {
+                    $lastTime = Carbon::parse($lastTime)->setTimezone('Asia/Manila');
+
+                    if ($lastTime->diffInMinutes($now) < 5) {
+                        $remaining = 5 - $lastTime->diffInMinutes($now);
+
+                        return response()->json([
+                            'isSuccess' => false,
+                            'message' => "Please wait {$remaining} more minute(s) before tapping again"
+                        ], 429);
+                    }
+                }
+            }
+
+            // TIME IN
             if (!$attendance || $attendance->time_out) {
 
                 $attendance = EmployeeAttendance::create([
@@ -195,7 +231,9 @@ class StudentAttendanceController extends Controller
                 ]);
 
                 $action = 'TIME IN';
-            } else {
+            }
+            // TIME OUT
+            else {
 
                 $attendance->update([
                     'time_out' => $now,
