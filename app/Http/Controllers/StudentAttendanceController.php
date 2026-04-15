@@ -120,6 +120,7 @@ class StudentAttendanceController extends Controller
             }
             // TIME OUT
             elseif (!$attendance->time_out) {
+
                 $timeIn = Carbon::parse($attendance->time_in)->setTimezone('Asia/Manila');
 
                 if ($timeIn->diffInMinutes($now) < 5) {
@@ -138,6 +139,13 @@ class StudentAttendanceController extends Controller
 
                 $action = 'TIME OUT';
             }
+            // ALREADY COMPLETED
+            else {
+                return response()->json([
+                    'isSuccess' => false,
+                    'message' => 'Already timed in and out for today'
+                ], 400);
+            }
 
             Log::info("ACTION: $action", ['student_number' => $student->student_number]);
 
@@ -150,7 +158,6 @@ class StudentAttendanceController extends Controller
                 $number = $student->guardian_contact_number ?: $student->contact_number;
 
                 if ($number) {
-                    // Format number to 639XXXXXXXXX
                     $number = preg_replace('/^0/', '63', $number);
                     $number = preg_replace('/\D/', '', $number);
 
@@ -164,7 +171,7 @@ class StudentAttendanceController extends Controller
                         'apikey' => env('SEMAPHORE_API_KEY'),
                         'number' => $number,
                         'message' => $message,
-                        'sendername' => env('SEMAPHORE_SENDER_NAME') // optional
+                        'sendername' => env('SEMAPHORE_SENDER_NAME')
                     ]);
 
                     Log::info("Semaphore Response", [
@@ -186,7 +193,7 @@ class StudentAttendanceController extends Controller
         }
 
         // =========================
-        //  CHECK EMPLOYEE
+        // CHECK EMPLOYEE
         // =========================
         $employee = Employee::where('rfid_tag_number', $request->rfid_tag_number)
             ->where('is_archived', 0)
@@ -229,6 +236,13 @@ class StudentAttendanceController extends Controller
 
                 $action = 'TIME OUT';
             }
+            // ALREADY COMPLETED
+            else {
+                return response()->json([
+                    'isSuccess' => false,
+                    'message' => 'Already timed in and out for today'
+                ], 400);
+            }
 
             Log::info("EMPLOYEE ACTION: $action", [
                 'employee_number' => $employee->employee_number
@@ -244,7 +258,7 @@ class StudentAttendanceController extends Controller
         }
 
         // =========================
-        // ❌ NOT FOUND
+        // NOT FOUND
         // =========================
         return response()->json([
             'isSuccess' => false,
