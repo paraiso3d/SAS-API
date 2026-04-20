@@ -127,33 +127,27 @@ class StudentAttendanceController extends Controller
                 }
             }
 
-            // TIME IN
+            // TIME IN / OUT
             if (!$attendance || $attendance->time_out) {
-
                 $attendance = StudentAttendance::create([
                     'student_number' => $student->student_number,
                     'attendance_date' => $today,
                     'time_in' => $now,
                     'status' => 'Timed In'
                 ]);
-
                 $action = 'TIME IN';
-            }
-            // TIME OUT
-            else {
-
+            } else {
                 $attendance->update([
                     'time_out' => $now,
                     'status' => 'Timed Out'
                 ]);
-
                 $action = 'TIME OUT';
             }
 
             Log::info("ACTION: $action", ['student_number' => $student->student_number]);
 
             // =========================
-            // SMS
+            // SMS (SEMAPHORE → PHILSMS FALLBACK)
             // =========================
             try {
                 $fullName = "{$student->first_name} {$student->last_name}";
@@ -161,6 +155,7 @@ class StudentAttendanceController extends Controller
                 $number = $student->guardian_contact_number ?: $student->contact_number;
 
                 if ($number) {
+                    // format to 63XXXXXXXXXX
                     $number = preg_replace('/^0/', '63', $number);
                     $number = preg_replace('/\D/', '', $number);
 
@@ -168,15 +163,60 @@ class StudentAttendanceController extends Controller
                         . ($action === 'TIME OUT' ? "TIMED OUT" : "TIMED IN")
                         . " at {$now->format('h:i A')}. Course: {$details}.";
 
-                    Http::asForm()->post('https://semaphore.co/api/v4/messages', [
+                    // =========================
+                    // 1. TRY SEMAPHORE
+                    // =========================
+                    $semaphore = Http::asForm()->post('https://semaphore.co/api/v4/messages', [
                         'apikey' => env('SEMAPHORE_API_KEY'),
                         'number' => $number,
                         'message' => $message,
                         'sendername' => env('SEMAPHORE_SENDER_NAME')
                     ]);
+
+                    if ($semaphore->successful()) {
+                        Log::info('SMS SENT VIA SEMAPHORE', [
+                            'number' => $number,
+                            'response' => $semaphore->json()
+                        ]);
+                    } else {
+
+                        Log::warning('SEMAPHORE FAILED, TRYING PHILSMS', [
+                            'status' => $semaphore->status(),
+                            'body' => $semaphore->body()
+                        ]);
+
+                        // =========================
+                        // 2. FALLBACK TO PHILSMS
+                        // =========================
+                        $philsms = Http::withHeaders([
+                            'Authorization' => 'Bearer ' . env('PHILSMS_API_TOKEN'),
+                            'Accept' => 'application/json',
+                        ])->post('https://dashboard.philsms.com/api/v3/sms/send', [
+                            'recipient' => $number,
+                            'sender_id' => env('PHILSMS_SENDER_ID'),
+                            'type' => 'plain',
+                            'message' => $message,
+                        ]);
+
+                        $responseData = $philsms->json();
+
+                        if ($philsms->successful() && ($responseData['status'] ?? null) === 'success') {
+                            Log::info('SMS SENT VIA PHILSMS', [
+                                'number' => $number,
+                                'response' => $responseData
+                            ]);
+                        } else {
+                            Log::error('PHILSMS FAILED', [
+                                'status' => $philsms->status(),
+                                'response' => $responseData
+                            ]);
+                        }
+                    }
                 }
-            } catch (\Exception $e) {
-                Log::error("SMS failed: " . $e->getMessage());
+            } catch (\Throwable $th) {
+                Log::error('SMS SYSTEM ERROR', [
+                    'error' => $th->getMessage()
+                ]);
             }
 
             return response()->json([
@@ -189,7 +229,7 @@ class StudentAttendanceController extends Controller
         }
 
         // =========================
-        // CHECK EMPLOYEE
+        // EMPLOYEE (NO SMS YET, CAN ADD SAME LOGIC)
         // =========================
         $employee = Employee::where('rfid_tag_number', $request->rfid_tag_number)
             ->where('is_archived', 0)
@@ -202,7 +242,6 @@ class StudentAttendanceController extends Controller
                 ->latest()
                 ->first();
 
-            // ⛔ 5 MINUTE INTERVAL CHECK
             if ($attendance) {
                 $lastTime = $attendance->time_out ?? $attendance->time_in;
 
@@ -220,26 +259,19 @@ class StudentAttendanceController extends Controller
                 }
             }
 
-            // TIME IN
             if (!$attendance || $attendance->time_out) {
-
                 $attendance = EmployeeAttendance::create([
                     'employee_number' => $employee->employee_number,
                     'attendance_date' => $today,
                     'time_in' => $now,
                     'status' => 'Timed In'
                 ]);
-
                 $action = 'TIME IN';
-            }
-            // TIME OUT
-            else {
-
+            } else {
                 $attendance->update([
                     'time_out' => $now,
                     'status' => 'Timed Out'
                 ]);
-
                 $action = 'TIME OUT';
             }
 
