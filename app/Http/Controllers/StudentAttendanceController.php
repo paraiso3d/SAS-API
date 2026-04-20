@@ -109,7 +109,7 @@ class StudentAttendanceController extends Controller
                 ->latest()
                 ->first();
 
-            // ⛔ 5 MINUTE INTERVAL CHECK
+            //  5 MINUTE INTERVAL CHECK
             if ($attendance) {
                 $lastTime = $attendance->time_out ?? $attendance->time_in;
 
