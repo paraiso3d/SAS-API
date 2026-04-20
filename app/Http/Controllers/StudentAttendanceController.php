@@ -147,7 +147,7 @@ class StudentAttendanceController extends Controller
             Log::info("ACTION: $action", ['student_number' => $student->student_number]);
 
             // =========================
-            // SMS (PHILSMS → SEMAPHORE FALLBACK)
+            // SMS (PHILSMS ONLY)
             // =========================
             try {
                 $fullName = "{$student->first_name} {$student->last_name}";
@@ -163,10 +163,7 @@ class StudentAttendanceController extends Controller
                         . ($action === 'TIME OUT' ? "TIMED OUT" : "TIMED IN")
                         . " at {$now->format('h:i A')}";
 
-                    // =========================
-                    // 1. TRY PHILSMS FIRST
-                    // =========================
-                    $philsms = Http::withHeaders([
+                    $philsms = Http::timeout(5)->withHeaders([
                         'Authorization' => 'Bearer ' . env('PHILSMS_API_TOKEN'),
                         'Accept' => 'application/json',
                     ])->post('https://dashboard.philsms.com/api/v3/sms/send', [
@@ -179,41 +176,15 @@ class StudentAttendanceController extends Controller
                     $responseData = $philsms->json();
 
                     if ($philsms->successful() && ($responseData['status'] ?? null) === 'success') {
-
                         Log::info('SMS SENT VIA PHILSMS', [
                             'number' => $number,
                             'response' => $responseData
                         ]);
                     } else {
-
-                        Log::warning('PHILSMS FAILED, TRYING SEMAPHORE', [
+                        Log::error('PHILSMS FAILED', [
                             'status' => $philsms->status(),
                             'response' => $responseData
                         ]);
-
-                        // =========================
-                        // 2. FALLBACK TO SEMAPHORE
-                        // =========================
-                        $semaphore = Http::asForm()->post('https://semaphore.co/api/v4/messages', [
-                            'apikey' => env('SEMAPHORE_API_KEY'),
-                            'number' => $number,
-                            'message' => $message,
-                            'sendername' => env('SEMAPHORE_SENDER_NAME')
-                        ]);
-
-                        if ($semaphore->successful()) {
-                            Log::info('SMS SENT VIA SEMAPHORE', [
-                                'number' => $number,
-                                'response' => $semaphore->json()
-                            ]);
-                        } else {
-                            Log::error('BOTH SMS PROVIDERS FAILED', [
-                                'philsms_status' => $philsms->status(),
-                                'philsms_response' => $responseData,
-                                'semaphore_status' => $semaphore->status(),
-                                'semaphore_response' => $semaphore->body()
-                            ]);
-                        }
                     }
                 }
             } catch (\Throwable $th) {
@@ -221,66 +192,6 @@ class StudentAttendanceController extends Controller
                     'error' => $th->getMessage()
                 ]);
             }
-
-            return response()->json([
-                'type' => 'student',
-                'isSuccess' => true,
-                'message' => $action . ' recorded',
-                'attendance' => $attendance,
-                'name' => $student->first_name . ' ' . $student->last_name
-            ], 200);
-        }
-
-        // =========================
-        // EMPLOYEE (NO SMS YET, CAN ADD SAME LOGIC)
-        // =========================
-        $employee = Employee::where('rfid_tag_number', $request->rfid_tag_number)
-            ->where('is_archived', 0)
-            ->first();
-
-        if ($employee) {
-
-            $attendance = EmployeeAttendance::where('employee_number', $employee->employee_number)
-                ->where('attendance_date', $today)
-                ->latest()
-                ->first();
-
-            if ($attendance) {
-                $lastTime = $attendance->time_out ?? $attendance->time_in;
-
-                if ($lastTime) {
-                    $lastTime = Carbon::parse($lastTime)->setTimezone('Asia/Manila');
-
-                    if ($lastTime->diffInMinutes($now) < 5) {
-                        $remaining = 5 - $lastTime->diffInMinutes($now);
-
-                        return response()->json([
-                            'isSuccess' => false,
-                            'message' => "Please wait {$remaining} more minute(s) before tapping again"
-                        ], 429);
-                    }
-                }
-            }
-
-            if (!$attendance || $attendance->time_out) {
-                $attendance = EmployeeAttendance::create([
-                    'employee_number' => $employee->employee_number,
-                    'attendance_date' => $today,
-                    'time_in' => $now,
-                    'status' => 'Timed In'
-                ]);
-                $action = 'TIME IN';
-            } else {
-                $attendance->update([
-                    'time_out' => $now,
-                    'status' => 'Timed Out'
-                ]);
-                $action = 'TIME OUT';
-            }
-
-            Log::info("EMPLOYEE ACTION: $action", [
-                'employee_number' => $employee->employee_number
-            ]);
 
             return response()->json([
                 'type' => 'employee',
