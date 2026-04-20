@@ -158,7 +158,7 @@ class StudentAttendanceController extends Controller
                     $number = preg_replace('/^0/', '63', $number);
                     $number = preg_replace('/\D/', '', $number);
 
-                    // ✅ SIMPLIFIED MESSAGE
+                    // SIMPLIFIED MESSAGE
                     $message = "{$fullName} has "
                         . ($action === 'TIME OUT' ? "TIMED OUT" : "TIMED IN")
                         . " at {$now->format('h:i A')}";
