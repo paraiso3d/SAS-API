@@ -147,11 +147,10 @@ class StudentAttendanceController extends Controller
             Log::info("ACTION: $action", ['student_number' => $student->student_number]);
 
             // =========================
-            // SMS (SEMAPHORE → PHILSMS FALLBACK)
+            // SMS (PHILSMS → SEMAPHORE FALLBACK)
             // =========================
             try {
                 $fullName = "{$student->first_name} {$student->last_name}";
-                $details = "{$student->course_name} - {$student->section_name}";
                 $number = $student->guardian_contact_number ?: $student->contact_number;
 
                 if ($number) {
@@ -159,56 +158,60 @@ class StudentAttendanceController extends Controller
                     $number = preg_replace('/^0/', '63', $number);
                     $number = preg_replace('/\D/', '', $number);
 
-                    $message = "Notice: {$fullName} ({$student->student_number}) has "
+                    // ✅ SIMPLIFIED MESSAGE
+                    $message = "{$fullName} has "
                         . ($action === 'TIME OUT' ? "TIMED OUT" : "TIMED IN")
-                        . " at {$now->format('h:i A')}. Course: {$details}.";
+                        . " at {$now->format('h:i A')}";
 
                     // =========================
-                    // 1. TRY SEMAPHORE
+                    // 1. TRY PHILSMS FIRST
                     // =========================
-                    $semaphore = Http::asForm()->post('https://semaphore.co/api/v4/messages', [
-                        'apikey' => env('SEMAPHORE_API_KEY'),
-                        'number' => $number,
+                    $philsms = Http::withHeaders([
+                        'Authorization' => 'Bearer ' . env('PHILSMS_API_TOKEN'),
+                        'Accept' => 'application/json',
+                    ])->post('https://dashboard.philsms.com/api/v3/sms/send', [
+                        'recipient' => $number,
+                        'sender_id' => env('PHILSMS_SENDER_ID'),
+                        'type' => 'plain',
                         'message' => $message,
-                        'sendername' => env('SEMAPHORE_SENDER_NAME')
                     ]);
 
-                    if ($semaphore->successful()) {
-                        Log::info('SMS SENT VIA SEMAPHORE', [
+                    $responseData = $philsms->json();
+
+                    if ($philsms->successful() && ($responseData['status'] ?? null) === 'success') {
+
+                        Log::info('SMS SENT VIA PHILSMS', [
                             'number' => $number,
-                            'response' => $semaphore->json()
+                            'response' => $responseData
                         ]);
                     } else {
 
-                        Log::warning('SEMAPHORE FAILED, TRYING PHILSMS', [
-                            'status' => $semaphore->status(),
-                            'body' => $semaphore->body()
+                        Log::warning('PHILSMS FAILED, TRYING SEMAPHORE', [
+                            'status' => $philsms->status(),
+                            'response' => $responseData
                         ]);
 
                         // =========================
-                        // 2. FALLBACK TO PHILSMS
+                        // 2. FALLBACK TO SEMAPHORE
                         // =========================
-                        $philsms = Http::withHeaders([
-                            'Authorization' => 'Bearer ' . env('PHILSMS_API_TOKEN'),
-                            'Accept' => 'application/json',
-                        ])->post('https://dashboard.philsms.com/api/v3/sms/send', [
-                            'recipient' => $number,
-                            'sender_id' => env('PHILSMS_SENDER_ID'),
-                            'type' => 'plain',
+                        $semaphore = Http::asForm()->post('https://semaphore.co/api/v4/messages', [
+                            'apikey' => env('SEMAPHORE_API_KEY'),
+                            'number' => $number,
                             'message' => $message,
+                            'sendername' => env('SEMAPHORE_SENDER_NAME')
                         ]);
 
-                        $responseData = $philsms->json();
-
-                        if ($philsms->successful() && ($responseData['status'] ?? null) === 'success') {
-                            Log::info('SMS SENT VIA PHILSMS', [
+                        if ($semaphore->successful()) {
+                            Log::info('SMS SENT VIA SEMAPHORE', [
                                 'number' => $number,
-                                'response' => $responseData
+                                'response' => $semaphore->json()
                             ]);
                         } else {
-                            Log::error('PHILSMS FAILED', [
-                                'status' => $philsms->status(),
-                                'response' => $responseData
+                            Log::error('BOTH SMS PROVIDERS FAILED', [
+                                'philsms_status' => $philsms->status(),
+                                'philsms_response' => $responseData,
+                                'semaphore_status' => $semaphore->status(),
+                                'semaphore_response' => $semaphore->body()
                             ]);
                         }
                     }
