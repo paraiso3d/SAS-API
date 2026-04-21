@@ -96,9 +96,20 @@ class StudentAttendanceController extends Controller
         $today = $now->toDateString();
 
         // =========================
+        // NORMALIZE RFID
+        // =========================
+        $rfid = trim($request->rfid_tag_number);
+        $rfid = preg_replace('/\D/', '', $rfid);
+
+        Log::info('RFID DEBUG', [
+            'raw' => $request->rfid_tag_number,
+            'normalized' => $rfid
+        ]);
+
+        // =========================
         // CHECK STUDENT FIRST
         // =========================
-        $student = Students::where('rfid_tag_number', $request->rfid_tag_number)
+        $student = Students::whereRaw("REPLACE(rfid_tag_number, ' ', '') = ?", [$rfid])
             ->where('is_archived', 0)
             ->first();
 
@@ -106,7 +117,7 @@ class StudentAttendanceController extends Controller
 
             $attendance = StudentAttendance::where('student_number', $student->student_number)
                 ->where('attendance_date', $today)
-                ->latest()
+                ->orderBy('time_in', 'desc')
                 ->first();
 
             // 5 MINUTE INTERVAL CHECK
@@ -149,16 +160,6 @@ class StudentAttendanceController extends Controller
                 'student_number' => $student->student_number
             ]);
 
-            // =========================
-            // SMS
-            // =========================
-            $this->sendSms(
-                "{$student->first_name} {$student->last_name}",
-                $student->guardian_contact_number ?: $student->contact_number,
-                $action,
-                $now
-            );
-
             return response()->json([
                 'type' => 'student',
                 'isSuccess' => true,
@@ -171,15 +172,15 @@ class StudentAttendanceController extends Controller
         // =========================
         // CHECK EMPLOYEE
         // =========================
-        $employee = Employee::where('rfid_tag_number', $request->rfid_tag_number)
+        $employee = Employee::whereRaw("REPLACE(rfid_tag_number, ' ', '') = ?", [$rfid])
             ->where('is_archived', 0)
             ->first();
 
         if ($employee) {
 
-            $attendance = EmployeeAttendance::where('employee_id', $employee->id)
+            $attendance = EmployeeAttendance::where('employee_number', $employee->employee_number)
                 ->where('attendance_date', $today)
-                ->latest()
+                ->orderBy('time_in', 'desc')
                 ->first();
 
             // 5 MINUTE INTERVAL CHECK
@@ -204,7 +205,7 @@ class StudentAttendanceController extends Controller
             // TIME IN / OUT
             if (!$attendance || $attendance->time_out) {
                 $attendance = EmployeeAttendance::create([
-                    'employee_id' => $employee->id,
+                    'employee_number' => $employee->employee_number, // ✅ FIXED
                     'attendance_date' => $today,
                     'time_in' => $now,
                     'status' => 'Timed In'
@@ -219,7 +220,7 @@ class StudentAttendanceController extends Controller
             }
 
             Log::info("EMPLOYEE ACTION: $action", [
-                'employee_id' => $employee->id
+                'employee_number' => $employee->employee_number
             ]);
 
             return response()->json([
@@ -239,6 +240,7 @@ class StudentAttendanceController extends Controller
             'message' => 'RFID not recognized'
         ], 404);
     }
+
     private function sendSms($fullName, $number, $action, $now)
     {
         try {
