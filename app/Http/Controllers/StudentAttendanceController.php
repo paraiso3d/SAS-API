@@ -222,14 +222,6 @@ class StudentAttendanceController extends Controller
                 'employee_id' => $employee->id
             ]);
 
-            // SMS
-            $this->sendSms(
-                "{$employee->first_name} {$employee->last_name}",
-                $employee->contact_number,
-                $action,
-                $now
-            );
-
             return response()->json([
                 'type' => 'employee',
                 'isSuccess' => true,
@@ -246,6 +238,45 @@ class StudentAttendanceController extends Controller
             'isSuccess' => false,
             'message' => 'RFID not recognized'
         ], 404);
+    }
+    private function sendSms($fullName, $number, $action, $now)
+    {
+        try {
+            if (!$number) return;
+
+            // format to 63XXXXXXXXXX
+            $number = preg_replace('/^0/', '63', $number);
+            $number = preg_replace('/\D/', '', $number);
+
+            $message = "{$fullName} has "
+                . ($action === 'TIME OUT' ? "TIMED OUT" : "TIMED IN")
+                . " at {$now->format('h:i A')}";
+
+            $response = Http::timeout(5)->withHeaders([
+                'Authorization' => 'Bearer ' . env('PHILSMS_API_TOKEN'),
+                'Accept' => 'application/json',
+            ])->post('https://dashboard.philsms.com/api/v3/sms/send', [
+                'recipient' => $number,
+                'sender_id' => env('PHILSMS_SENDER_ID'),
+                'type' => 'plain',
+                'message' => $message,
+            ]);
+
+            $data = $response->json();
+
+            if ($response->successful() && ($data['status'] ?? null) === 'success') {
+                Log::info('SMS SENT', ['number' => $number]);
+            } else {
+                Log::error('SMS FAILED', [
+                    'status' => $response->status(),
+                    'response' => $data
+                ]);
+            }
+        } catch (\Throwable $th) {
+            Log::error('SMS ERROR', [
+                'error' => $th->getMessage()
+            ]);
+        }
     }
 
 
