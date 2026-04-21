@@ -109,7 +109,7 @@ class StudentAttendanceController extends Controller
                 ->latest()
                 ->first();
 
-            //  5 MINUTE INTERVAL CHECK
+            // 5 MINUTE INTERVAL CHECK
             if ($attendance) {
                 $lastTime = $attendance->time_out ?? $attendance->time_in;
 
@@ -120,6 +120,7 @@ class StudentAttendanceController extends Controller
                         $remaining = 5 - $lastTime->diffInMinutes($now);
 
                         return response()->json([
+                            'type' => 'student',
                             'isSuccess' => false,
                             'message' => "Please wait {$remaining} more minute(s) before tapping again"
                         ], 429);
@@ -144,54 +145,90 @@ class StudentAttendanceController extends Controller
                 $action = 'TIME OUT';
             }
 
-            Log::info("ACTION: $action", ['student_number' => $student->student_number]);
+            Log::info("STUDENT ACTION: $action", [
+                'student_number' => $student->student_number
+            ]);
 
             // =========================
-            // SMS (PHILSMS ONLY)
+            // SMS
             // =========================
-            try {
-                $fullName = "{$student->first_name} {$student->last_name}";
-                $number = $student->guardian_contact_number ?: $student->contact_number;
+            $this->sendSms(
+                "{$student->first_name} {$student->last_name}",
+                $student->guardian_contact_number ?: $student->contact_number,
+                $action,
+                $now
+            );
 
-                if ($number) {
-                    // format to 63XXXXXXXXXX
-                    $number = preg_replace('/^0/', '63', $number);
-                    $number = preg_replace('/\D/', '', $number);
+            return response()->json([
+                'type' => 'student',
+                'isSuccess' => true,
+                'message' => $action . ' recorded',
+                'attendance' => $attendance,
+                'name' => $student->first_name . ' ' . $student->last_name
+            ], 200);
+        }
 
-                    // SIMPLIFIED MESSAGE
-                    $message = "{$fullName} has "
-                        . ($action === 'TIME OUT' ? "TIMED OUT" : "TIMED IN")
-                        . " at {$now->format('h:i A')}";
+        // =========================
+        // CHECK EMPLOYEE
+        // =========================
+        $employee = Employee::where('rfid_tag_number', $request->rfid_tag_number)
+            ->where('is_archived', 0)
+            ->first();
 
-                    $philsms = Http::timeout(5)->withHeaders([
-                        'Authorization' => 'Bearer ' . env('PHILSMS_API_TOKEN'),
-                        'Accept' => 'application/json',
-                    ])->post('https://dashboard.philsms.com/api/v3/sms/send', [
-                        'recipient' => $number,
-                        'sender_id' => env('PHILSMS_SENDER_ID'),
-                        'type' => 'plain',
-                        'message' => $message,
-                    ]);
+        if ($employee) {
 
-                    $responseData = $philsms->json();
+            $attendance = EmployeeAttendance::where('employee_id', $employee->id)
+                ->where('attendance_date', $today)
+                ->latest()
+                ->first();
 
-                    if ($philsms->successful() && ($responseData['status'] ?? null) === 'success') {
-                        Log::info('SMS SENT VIA PHILSMS', [
-                            'number' => $number,
-                            'response' => $responseData
-                        ]);
-                    } else {
-                        Log::error('PHILSMS FAILED', [
-                            'status' => $philsms->status(),
-                            'response' => $responseData
-                        ]);
+            // 5 MINUTE INTERVAL CHECK
+            if ($attendance) {
+                $lastTime = $attendance->time_out ?? $attendance->time_in;
+
+                if ($lastTime) {
+                    $lastTime = Carbon::parse($lastTime)->setTimezone('Asia/Manila');
+
+                    if ($lastTime->diffInMinutes($now) < 5) {
+                        $remaining = 5 - $lastTime->diffInMinutes($now);
+
+                        return response()->json([
+                            'type' => 'employee',
+                            'isSuccess' => false,
+                            'message' => "Please wait {$remaining} more minute(s) before tapping again"
+                        ], 429);
                     }
                 }
-            } catch (\Throwable $th) {
-                Log::error('SMS SYSTEM ERROR', [
-                    'error' => $th->getMessage()
-                ]);
             }
+
+            // TIME IN / OUT
+            if (!$attendance || $attendance->time_out) {
+                $attendance = EmployeeAttendance::create([
+                    'employee_id' => $employee->id,
+                    'attendance_date' => $today,
+                    'time_in' => $now,
+                    'status' => 'Timed In'
+                ]);
+                $action = 'TIME IN';
+            } else {
+                $attendance->update([
+                    'time_out' => $now,
+                    'status' => 'Timed Out'
+                ]);
+                $action = 'TIME OUT';
+            }
+
+            Log::info("EMPLOYEE ACTION: $action", [
+                'employee_id' => $employee->id
+            ]);
+
+            // SMS
+            $this->sendSms(
+                "{$employee->first_name} {$employee->last_name}",
+                $employee->contact_number,
+                $action,
+                $now
+            );
 
             return response()->json([
                 'type' => 'employee',
@@ -202,6 +239,9 @@ class StudentAttendanceController extends Controller
             ], 200);
         }
 
+        // =========================
+        // NOT FOUND
+        // =========================
         return response()->json([
             'isSuccess' => false,
             'message' => 'RFID not recognized'
