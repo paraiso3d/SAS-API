@@ -344,10 +344,9 @@ class StudentAttendanceController extends Controller
         $today = $now->toDateString();
 
         // =========================
-        // NORMALIZE RFID
+        // NORMALIZE RFID (SAFE VERSION)
         // =========================
         $rfid = trim($request->rfid_tag_number);
-        $rfid = preg_replace('/\D/', '', $rfid);
 
         Log::info('RFID DEBUG', [
             'raw' => $request->rfid_tag_number,
@@ -355,17 +354,31 @@ class StudentAttendanceController extends Controller
         ]);
 
         // =========================
+        // 🔒 FAST TAP LOCK (FIXES YOUR MAIN ISSUE)
+        // =========================
+        $lockKey = "rfid_lock_" . $rfid;
+
+        if (cache()->has($lockKey)) {
+            return response()->json([
+                'isSuccess' => false,
+                'message' => 'Please wait before tapping again'
+            ], 429);
+        }
+
+        // lock for 3 seconds (prevents double / spam taps)
+        cache()->put($lockKey, true, 3);
+
+        // =========================
         // GLOBAL COOLDOWN CHECK (5 MIN)
         // =========================
-
         $lastStudent = StudentAttendance::whereHas('student', function ($q) use ($rfid) {
-            $q->whereRaw("REPLACE(rfid_tag_number, ' ', '') = ?", [$rfid]);
+            $q->whereRaw("TRIM(rfid_tag_number) = ?", [$rfid]);
         })
             ->latest('created_at')
             ->first();
 
         $lastEmployee = EmployeeAttendance::whereHas('employee', function ($q) use ($rfid) {
-            $q->whereRaw("REPLACE(rfid_tag_number, ' ', '') = ?", [$rfid]);
+            $q->whereRaw("TRIM(rfid_tag_number) = ?", [$rfid]);
         })
             ->latest('created_at')
             ->first();
@@ -391,7 +404,6 @@ class StudentAttendanceController extends Controller
         // =========================
         // CHECK STUDENT FIRST
         // =========================
-
         $student = Students::whereRaw("TRIM(rfid_tag_number) = ?", [$rfid])
             ->where('is_archived', 0)
             ->first();
@@ -423,7 +435,6 @@ class StudentAttendanceController extends Controller
                 'student_number' => $student->student_number
             ]);
 
-            // SEND SMS
             $this->sendSms(
                 $student->first_name . ' ' . $student->last_name,
                 $student->guardian_contact_number,
@@ -474,7 +485,6 @@ class StudentAttendanceController extends Controller
                 'employee_number' => $employee->employee_number
             ]);
 
-            // SEND SMS
             $this->sendSms(
                 $employee->first_name . ' ' . $employee->last_name,
                 $employee->contact_number,
@@ -496,7 +506,6 @@ class StudentAttendanceController extends Controller
             'message' => 'RFID not recognized'
         ], 404);
     }
-
     private function sendSms($fullName, $number, $action, $now)
     {
         try {
