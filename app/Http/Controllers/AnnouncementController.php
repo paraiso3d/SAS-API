@@ -66,4 +66,17 @@ class AnnouncementController extends Controller
 
         return response()->json($announcements, 200);
     }
+    
+    public function archiveAnnouncement($id)
+    {
+        $announcement = Announcements::find($id);
+
+        if (!$announcement) {
+            return response()->json(['message' => 'Announcement not found'], 404);
+        }
+
+        $announcement->update(['is_archived' => true]);
+
+        return response()->json(['message' => 'Announcement archived successfully'], 200);
+    }
 }

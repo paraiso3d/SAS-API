@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Employee;
 use App\Models\EmployeeAttendance;
+use Carbon\Carbon;
 
 class EmployeeController extends Controller
 {
@@ -15,7 +16,7 @@ class EmployeeController extends Controller
         $query = EmployeeAttendance::with('employee');
 
         // =========================
-        // SEARCH (employee number or name)
+        // SEARCH
         // =========================
         if ($request->filled('search')) {
             $search = $request->search;
@@ -38,7 +39,7 @@ class EmployeeController extends Controller
         }
 
         // =========================
-        //  DATE RANGE FILTER
+        // DATE FILTER
         // =========================
         if ($request->filled('start_date')) {
             $query->whereDate('attendance_date', '>=', $request->start_date);
@@ -48,48 +49,69 @@ class EmployeeController extends Controller
             $query->whereDate('attendance_date', '<=', $request->end_date);
         }
 
+        $records = $query->orderBy('attendance_date', 'desc')->get();
+
         // =========================
-        // GET DATA
+        // CALCULATE TOTAL HOURS
         // =========================
-        $employeeAttendance = $query->orderBy('attendance_date', 'desc')
-            ->get()
-            ->map(function ($attendance) {
+        $totalMinutes = 0;
 
-                $employee = $attendance->employee;
+        foreach ($records as $attendance) {
+            if ($attendance->time_in && $attendance->time_out) {
+                $timeIn = Carbon::parse($attendance->time_in);
+                $timeOut = Carbon::parse($attendance->time_out);
 
-                return [
-                    'id' => $attendance->id,
-                    'employee_number' => $attendance->employee_number,
-                    'attendance_date' => $attendance->attendance_date,
-                    'time_in' => $attendance->time_in,
-                    'time_out' => $attendance->time_out,
-                    'status' => $attendance->status,
+                $totalMinutes += $timeOut->diffInMinutes($timeIn);
+            }
+        }
 
-                    //  Employee Info
-                    'first_name' => $employee->first_name ?? null,
-                    'middle_name' => $employee->middle_name ?? null,
-                    'last_name' => $employee->last_name ?? null,
+        $totalHoursWorked = round($totalMinutes / 60, 2);
 
-                    'full_name' => $employee
-                        ? trim(
-                            $employee->first_name . ' ' .
-                                ($employee->middle_name ? $employee->middle_name . ' ' : '') .
-                                $employee->last_name
-                        )
-                        : null,
+        // =========================
+        // MAP DATA
+        // =========================
+        $employeeAttendance = $records->map(function ($attendance) {
 
-                    'profile_picture_url' => $employee && $employee->profile_picture
-                        ? asset($employee->profile_picture)
-                        : null,
+            $employee = $attendance->employee;
 
-                    'created_at' => $attendance->created_at,
-                ];
-            });
+            return [
+                'id' => $attendance->id,
+                'employee_number' => $attendance->employee_number,
+                'attendance_date' => $attendance->attendance_date,
+                'time_in' => $attendance->time_in,
+                'time_out' => $attendance->time_out,
+                'status' => $attendance->status,
+
+                'first_name' => $employee->first_name ?? null,
+                'middle_name' => $employee->middle_name ?? null,
+                'last_name' => $employee->last_name ?? null,
+
+                'full_name' => $employee
+                    ? trim(
+                        $employee->first_name . ' ' .
+                            ($employee->middle_name ? $employee->middle_name . ' ' : '') .
+                            $employee->last_name
+                    )
+                    : null,
+
+                'profile_picture_url' => $employee && $employee->profile_picture
+                    ? asset($employee->profile_picture)
+                    : null,
+
+                'created_at' => $attendance->created_at,
+            ];
+        });
 
         return response()->json([
             'isSuccess' => true,
             'message' => 'Employee Attendance',
-            'data' => $employeeAttendance
+            'data' => $employeeAttendance,
+
+            // 🔥 NEW RESPONSE FIELD
+            'summary' => [
+                'total_hours_worked' => $totalHoursWorked,
+                'total_minutes_worked' => $totalMinutes
+            ]
         ], 200);
     }
 
