@@ -391,7 +391,8 @@ class StudentAttendanceController extends Controller
         // =========================
         // CHECK STUDENT FIRST
         // =========================
-        $student = Students::whereRaw("REPLACE(rfid_tag_number, ' ', '') = ?", [$rfid])
+
+        $student = Students::whereRaw("TRIM(rfid_tag_number) = ?", [$rfid])
             ->where('is_archived', 0)
             ->first();
 
@@ -442,7 +443,7 @@ class StudentAttendanceController extends Controller
         // =========================
         // CHECK EMPLOYEE
         // =========================
-        $employee = Employee::whereRaw("REPLACE(rfid_tag_number, ' ', '') = ?", [$rfid])
+        $employee = Employee::whereRaw("TRIM(rfid_tag_number) = ?", [$rfid])
             ->where('is_archived', 0)
             ->first();
 
