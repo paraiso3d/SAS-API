@@ -12,7 +12,46 @@ class EmployeeController extends Controller
     //Employee Attendace
     public function getEmployeeAttendance(Request $request)
     {
-        $employeeAttendance = EmployeeAttendance::with('employee')
+        $query = EmployeeAttendance::with('employee');
+
+        // =========================
+        // SEARCH (employee number or name)
+        // =========================
+        if ($request->filled('search')) {
+            $search = $request->search;
+
+            $query->where(function ($q) use ($search) {
+                $q->where('employee_number', 'LIKE', "%$search%")
+                    ->orWhereHas('employee', function ($emp) use ($search) {
+                        $emp->where('first_name', 'LIKE', "%$search%")
+                            ->orWhere('middle_name', 'LIKE', "%$search%")
+                            ->orWhere('last_name', 'LIKE', "%$search%");
+                    });
+            });
+        }
+
+        // =========================
+        // STATUS FILTER
+        // =========================
+        if ($request->filled('status') && $request->status !== 'All Status') {
+            $query->where('status', $request->status);
+        }
+
+        // =========================
+        //  DATE RANGE FILTER
+        // =========================
+        if ($request->filled('start_date')) {
+            $query->whereDate('attendance_date', '>=', $request->start_date);
+        }
+
+        if ($request->filled('end_date')) {
+            $query->whereDate('attendance_date', '<=', $request->end_date);
+        }
+
+        // =========================
+        // GET DATA
+        // =========================
+        $employeeAttendance = $query->orderBy('attendance_date', 'desc')
             ->get()
             ->map(function ($attendance) {
 
@@ -26,13 +65,17 @@ class EmployeeController extends Controller
                     'time_out' => $attendance->time_out,
                     'status' => $attendance->status,
 
-                    // 🔥 Employee Info
+                    //  Employee Info
                     'first_name' => $employee->first_name ?? null,
                     'middle_name' => $employee->middle_name ?? null,
                     'last_name' => $employee->last_name ?? null,
 
                     'full_name' => $employee
-                        ? trim($employee->first_name . ' ' . ($employee->middle_name ? $employee->middle_name . ' ' : '') . $employee->last_name)
+                        ? trim(
+                            $employee->first_name . ' ' .
+                                ($employee->middle_name ? $employee->middle_name . ' ' : '') .
+                                $employee->last_name
+                        )
                         : null,
 
                     'profile_picture_url' => $employee && $employee->profile_picture
