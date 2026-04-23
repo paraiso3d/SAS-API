@@ -41,6 +41,7 @@ Route::post('archive/students/{id}', [StudentsController::class, 'archiveStudent
 Route::get('/student-templates', [StudentsController::class, 'getStudentTemplates']);
 Route::post('/verify-fingerprint', [StudentsController::class, 'verifyFingerprint']);
 //Student Attendance Routes
+Route::get('/attendance/summary', [StudentAttendanceController::class, 'getAttendanceSummary']);
 Route::get('/attendance/recent', [StudentAttendanceController::class, 'getrecentattendance']);
 Route::post('/attendance/time-in', [StudentAttendanceController::class, 'tapRFID']);
 Route::post('/attendance/time-out', [StudentAttendanceController::class, 'timeOut']);
@@ -61,6 +62,7 @@ Route::post('/announcements/archive/{id}', [AnnouncementController::class, 'arch
 
 //Employee Routes
 Route::get('/employee/attendance', [EmployeeController::class, 'getEmployeeAttendance']);
+Route::get('/employee/attendance/summary', [EmployeeController::class, 'getEmployeeAttendanceSummary']);
 Route::get('/employees', [EmployeeController::class, 'getEmployeeList']);
 Route::post('/employee/create', [EmployeeController::class, 'createEmployee']);
 Route::post('/employee/update/{id}', [EmployeeController::class, 'updateEmployee']);

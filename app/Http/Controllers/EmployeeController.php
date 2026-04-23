@@ -10,6 +10,54 @@ use Carbon\Carbon;
 class EmployeeController extends Controller
 {
 
+
+    public function getEmployeeAttendanceSummary(Request $request)
+    {
+        $query = EmployeeAttendance::query();
+
+        // =========================
+        // FILTERS (optional, same pattern)
+        // =========================
+        if ($request->filled('employee_number')) {
+            $query->where('employee_number', 'like', '%' . $request->employee_number . '%');
+        }
+
+        if ($request->filled('date')) {
+            $query->whereDate('attendance_date', $request->date);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('date_from') && $request->filled('date_to')) {
+            $query->whereBetween('attendance_date', [
+                $request->date_from,
+                $request->date_to
+            ]);
+        }
+
+        // =========================
+        // SUMMARY (DB-level, fast)
+        // =========================
+        $totalRecords = (clone $query)->count();
+
+        // Present = has time_in
+        $totalPresent = (clone $query)->whereNotNull('time_in')->count();
+
+        // Timed Out = has time_out
+        $totalTimedOut = (clone $query)->whereNotNull('time_out')->count();
+
+        return response()->json([
+            'message' => 'Employee Attendance Summary',
+            'data' => [
+                'total_records' => $totalRecords,
+                'present' => $totalPresent,
+                'timed_out' => $totalTimedOut
+            ]
+        ], 200);
+    }
+
     //Employee Attendace
     public function getEmployeeAttendance(Request $request)
     {

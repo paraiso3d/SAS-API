@@ -17,9 +17,59 @@ use App\Models\Employee;
 use App\Models\EmployeeAttendance;
 
 
+
 class StudentAttendanceController extends Controller
 {
 
+
+    public function getAttendanceSummary(Request $request)
+    {
+        $query = StudentAttendance::query();
+
+        // =========================
+        // SAME FILTERS (keep consistent)
+        // =========================
+        if ($request->filled('student_number')) {
+            $query->where('student_number', 'like', '%' . $request->student_number . '%');
+        }
+
+        if ($request->filled('date')) {
+            $query->whereDate('attendance_date', $request->date);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('date_from') && $request->filled('date_to')) {
+            $query->whereBetween('attendance_date', [
+                $request->date_from,
+                $request->date_to
+            ]);
+        }
+
+        // =========================
+        // GET FILTERED DATA
+        // =========================
+        $records = $query->get();
+
+        $totalRecords = $records->count();
+
+        // Present = has time_in
+        $totalPresent = $records->whereNotNull('time_in')->count();
+
+        // Optional: Timed Out (if you want extra stat)
+        $totalTimedOut = $records->whereNotNull('time_out')->count();
+
+        return response()->json([
+            'message' => 'Student Attendance Summary',
+            'data' => [
+                'total_records' => $totalRecords,
+                'present' => $totalPresent,
+                'timed_out' => $totalTimedOut
+            ]
+        ], 200);
+    }
 
 
     public function getrecentattendance()
@@ -543,18 +593,19 @@ class StudentAttendanceController extends Controller
         return response()->json($attendance, 200);
     }
 
+
+
     public function getAttendaces(Request $request)
     {
         $query = StudentAttendance::with('student');
 
-        //  FILTERS
-
-        // direct column (no need whereHas)
+        // =========================
+        // FILTERS
+        // =========================
         if ($request->filled('student_number')) {
             $query->where('student_number', 'like', '%' . $request->student_number . '%');
         }
 
-        // use attendance_date instead of created_at
         if ($request->filled('date')) {
             $query->whereDate('attendance_date', $request->date);
         }
@@ -563,7 +614,6 @@ class StudentAttendanceController extends Controller
             $query->where('status', $request->status);
         }
 
-        //  OPTIONAL: date range (way more useful)
         if ($request->filled('date_from') && $request->filled('date_to')) {
             $query->whereBetween('attendance_date', [
                 $request->date_from,
@@ -571,18 +621,70 @@ class StudentAttendanceController extends Controller
             ]);
         }
 
-        // SORT (latest first by default)
+        // =========================
+        // 🔥 COMPUTE TOTAL HOURS PER STUDENT
+        // =========================
+        $summaryQuery = clone $query;
+        $allRecords = $summaryQuery->get();
+
+        $studentHours = [];
+
+        foreach ($allRecords as $attendance) {
+
+            if (!$attendance->time_in || !$attendance->time_out) {
+                continue;
+            }
+
+            $timeIn = Carbon::parse($attendance->time_in);
+            $timeOut = Carbon::parse($attendance->time_out);
+
+            $minutes = $timeOut->diffInMinutes($timeIn);
+
+            $studentNumber = $attendance->student_number;
+
+            if (!isset($studentHours[$studentNumber])) {
+                $studentHours[$studentNumber] = 0;
+            }
+
+            $studentHours[$studentNumber] += $minutes;
+        }
+
+        // convert minutes to hours
+        foreach ($studentHours as $key => $minutes) {
+            $studentHours[$key] = round($minutes / 60, 2);
+        }
+
+        // =========================
+        // PAGINATION
+        // =========================
         $query->orderBy('attendance_date', 'desc');
 
-        //  PAGINATION (body-based)
         $perPage = $request->input('per_page', 10);
         $page = $request->input('page', 1);
 
         $attendances = $query->paginate($perPage, ['*'], 'page', $page);
 
+        // =========================
+        // 🔥 ATTACH HOURS TO EACH RECORD
+        // =========================
+        $data = collect($attendances->items())->map(function ($attendance) use ($studentHours) {
+
+            $studentNumber = $attendance->student_number;
+
+            return [
+                ...$attendance->toArray(),
+
+                // 🔥 here’s your total hours per student
+                'total_hours_rendered' => $studentHours[$studentNumber] ?? 0
+            ];
+        });
+
+        // =========================
+        // RESPONSE
+        // =========================
         return response()->json([
             'message' => 'Student Attendance List',
-            'data' => $attendances->items(),
+            'data' => $data,
             'pagination' => [
                 'current_page' => $attendances->currentPage(),
                 'last_page' => $attendances->lastPage(),
