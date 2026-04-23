@@ -366,7 +366,7 @@ class StudentAttendanceController extends Controller
         }
 
         // lock for 3 seconds (prevents double / spam taps)
-        cache()->put($lockKey, true, 1);
+        cache()->put($lockKey, true, 3);
 
         // =========================
         // GLOBAL COOLDOWN CHECK (5 MIN)
