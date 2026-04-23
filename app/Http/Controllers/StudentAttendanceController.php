@@ -86,202 +86,6 @@ class StudentAttendanceController extends Controller
     //  * Time in GOIP
     //  */
 
-    public function tapRFID(Request $request)
-    {
-        $request->validate([
-            'rfid_tag_number' => 'required|string',
-        ]);
-
-        Log::info('RFID TAP RECEIVED');
-
-        $now = Carbon::now('Asia/Manila');
-        $today = $now->toDateString();
-
-        // =========================
-        // NORMALIZE RFID
-        // =========================
-        $rfid = trim($request->rfid_tag_number);
-        $rfid = preg_replace('/\D/', '', $rfid);
-
-        Log::info('RFID DEBUG', [
-            'raw' => $request->rfid_tag_number,
-            'normalized' => $rfid
-        ]);
-
-        // =========================
-        // CHECK STUDENT FIRST
-        // =========================
-        $student = Students::whereRaw(
-            "REPLACE(REPLACE(rfid_tag_number, ' ', ''), '-', '') = ?",
-            [$rfid]
-        )->where('is_archived', 0)->first();
-
-        if ($student) {
-
-            $attendance = StudentAttendance::where('student_number', $student->student_number)
-                ->where('attendance_date', $today)
-                ->orderBy('time_in', 'desc')
-                ->first();
-
-            // =========================
-            // 5 MIN COOLDOWN (STUDENT)
-            // =========================
-            if ($attendance) {
-
-                $lastScanTime = $attendance->time_out ?: $attendance->time_in;
-
-                if ($lastScanTime) {
-                    $lastScanTime = Carbon::parse($lastScanTime)->setTimezone('Asia/Manila');
-
-                    if ($lastScanTime->diffInMinutes($now) < 5) {
-
-                        $remaining = 5 - $lastScanTime->diffInMinutes($now);
-
-                        return response()->json([
-                            'type' => 'student',
-                            'isSuccess' => false,
-                            'message' => "Please wait {$remaining} more minute(s) before tapping again"
-                        ], 429);
-                    }
-                }
-            }
-
-            // =========================
-            // TIME IN / OUT
-            // =========================
-            if (!$attendance || $attendance->time_out) {
-
-                $attendance = StudentAttendance::create([
-                    'student_number' => $student->student_number,
-                    'attendance_date' => $today,
-                    'time_in' => $now,
-                    'status' => 'Timed In'
-                ]);
-
-                $action = 'TIME IN';
-            } else {
-
-                $attendance->update([
-                    'time_out' => $now,
-                    'status' => 'Timed Out'
-                ]);
-
-                $action = 'TIME OUT';
-            }
-
-            Log::info("STUDENT ACTION: $action", [
-                'student_number' => $student->student_number
-            ]);
-
-            // =========================
-            // SMS
-            // =========================
-            $fullName = $student->first_name . ' ' . $student->last_name;
-
-            $message = "{$fullName} has "
-                . ($action === 'TIME OUT' ? "TIMED OUT" : "TIMED IN")
-                . " at {$now->format('h:i A')}";
-
-            $this->sendViaGoip($student->guardian_contact_number, $message);
-
-            return response()->json([
-                'type' => 'student',
-                'isSuccess' => true,
-                'message' => $action . ' recorded',
-                'attendance' => $attendance,
-                'name' => $fullName
-            ], 200);
-        }
-
-        // =========================
-        // CHECK EMPLOYEE
-        // =========================
-        $employee = Employee::whereRaw(
-            "REPLACE(REPLACE(rfid_tag_number, ' ', ''), '-', '') = ?",
-            [$rfid]
-        )->where('is_archived', 0)->first();
-
-        if ($employee) {
-
-            $attendance = EmployeeAttendance::where('employee_number', $employee->employee_number)
-                ->where('attendance_date', $today)
-                ->orderBy('time_in', 'desc')
-                ->first();
-
-            // =========================
-            // 5 MIN COOLDOWN (EMPLOYEE)
-            // =========================
-            if ($attendance) {
-
-                $lastScanTime = $attendance->time_out ?: $attendance->time_in;
-
-                if ($lastScanTime) {
-                    $lastScanTime = Carbon::parse($lastScanTime)->setTimezone('Asia/Manila');
-
-                    if ($lastScanTime->diffInMinutes($now) < 5) {
-
-                        $remaining = 5 - $lastScanTime->diffInMinutes($now);
-
-                        return response()->json([
-                            'type' => 'employee',
-                            'isSuccess' => false,
-                            'message' => "Please wait {$remaining} more minute(s) before tapping again"
-                        ], 429);
-                    }
-                }
-            }
-
-            // =========================
-            // TIME IN / OUT
-            // =========================
-            if (!$attendance || $attendance->time_out) {
-
-                $attendance = EmployeeAttendance::create([
-                    'employee_number' => $employee->employee_number,
-                    'attendance_date' => $today,
-                    'time_in' => $now,
-                    'status' => 'Timed In'
-                ]);
-
-                $action = 'TIME IN';
-            } else {
-
-                $attendance->update([
-                    'time_out' => $now,
-                    'status' => 'Timed Out'
-                ]);
-
-                $action = 'TIME OUT';
-            }
-
-            Log::info("EMPLOYEE ACTION: $action", [
-                'employee_number' => $employee->employee_number
-            ]);
-
-            return response()->json([
-                'type' => 'employee',
-                'isSuccess' => true,
-                'message' => $action . ' recorded',
-                'attendance' => $attendance,
-                'name' => $employee->first_name . ' ' . $employee->last_name
-            ], 200);
-        }
-
-        // =========================
-        // NOT FOUND
-        // =========================
-        return response()->json([
-            'isSuccess' => false,
-            'message' => 'RFID not recognized'
-        ], 404);
-    }
-
-
-
-    /**
-     * Time in PHILSMS (backup)
-     */
-
     // public function tapRFID(Request $request)
     // {
     //     $request->validate([
@@ -305,45 +109,12 @@ class StudentAttendanceController extends Controller
     //     ]);
 
     //     // =========================
-    //     // GLOBAL COOLDOWN CHECK (5 MIN)
-    //     // =========================
-
-    //     $lastStudent = StudentAttendance::whereHas('student', function ($q) use ($rfid) {
-    //         $q->whereRaw("REPLACE(rfid_tag_number, ' ', '') = ?", [$rfid]);
-    //     })
-    //         ->latest('created_at')
-    //         ->first();
-
-    //     $lastEmployee = EmployeeAttendance::whereHas('employee', function ($q) use ($rfid) {
-    //         $q->whereRaw("REPLACE(rfid_tag_number, ' ', '') = ?", [$rfid]);
-    //     })
-    //         ->latest('created_at')
-    //         ->first();
-
-    //     $lastAttendance = collect([$lastStudent, $lastEmployee])
-    //         ->filter()
-    //         ->sortByDesc('created_at')
-    //         ->first();
-
-    //     if ($lastAttendance) {
-    //         $lastTime = Carbon::parse($lastAttendance->created_at)->setTimezone('Asia/Manila');
-
-    //         if ($lastTime->diffInMinutes($now) < 5) {
-    //             $remaining = 5 - $lastTime->diffInMinutes($now);
-
-    //             return response()->json([
-    //                 'isSuccess' => false,
-    //                 'message' => "Please wait {$remaining} more minute(s) before tapping again"
-    //             ], 429);
-    //         }
-    //     }
-
-    //     // =========================
     //     // CHECK STUDENT FIRST
     //     // =========================
-    //     $student = Students::whereRaw("REPLACE(rfid_tag_number, ' ', '') = ?", [$rfid])
-    //         ->where('is_archived', 0)
-    //         ->first();
+    //     $student = Students::whereRaw(
+    //         "REPLACE(REPLACE(rfid_tag_number, ' ', ''), '-', '') = ?",
+    //         [$rfid]
+    //     )->where('is_archived', 0)->first();
 
     //     if ($student) {
 
@@ -352,19 +123,49 @@ class StudentAttendanceController extends Controller
     //             ->orderBy('time_in', 'desc')
     //             ->first();
 
+    //         // =========================
+    //         // 5 MIN COOLDOWN (STUDENT)
+    //         // =========================
+    //         if ($attendance) {
+
+    //             $lastScanTime = $attendance->time_out ?: $attendance->time_in;
+
+    //             if ($lastScanTime) {
+    //                 $lastScanTime = Carbon::parse($lastScanTime)->setTimezone('Asia/Manila');
+
+    //                 if ($lastScanTime->diffInMinutes($now) < 5) {
+
+    //                     $remaining = 5 - $lastScanTime->diffInMinutes($now);
+
+    //                     return response()->json([
+    //                         'type' => 'student',
+    //                         'isSuccess' => false,
+    //                         'message' => "Please wait {$remaining} more minute(s) before tapping again"
+    //                     ], 429);
+    //                 }
+    //             }
+    //         }
+
+    //         // =========================
+    //         // TIME IN / OUT
+    //         // =========================
     //         if (!$attendance || $attendance->time_out) {
+
     //             $attendance = StudentAttendance::create([
     //                 'student_number' => $student->student_number,
     //                 'attendance_date' => $today,
     //                 'time_in' => $now,
     //                 'status' => 'Timed In'
     //             ]);
+
     //             $action = 'TIME IN';
     //         } else {
+
     //             $attendance->update([
     //                 'time_out' => $now,
     //                 'status' => 'Timed Out'
     //             ]);
+
     //             $action = 'TIME OUT';
     //         }
 
@@ -372,29 +173,33 @@ class StudentAttendanceController extends Controller
     //             'student_number' => $student->student_number
     //         ]);
 
-    //         // SEND SMS
-    //         $this->sendSms(
-    //             $student->first_name . ' ' . $student->last_name,
-    //             $student->guardian_contact_number,
-    //             $action,
-    //             $now
-    //         );
+    //         // =========================
+    //         // SMS
+    //         // =========================
+    //         $fullName = $student->first_name . ' ' . $student->last_name;
+
+    //         $message = "{$fullName} has "
+    //             . ($action === 'TIME OUT' ? "TIMED OUT" : "TIMED IN")
+    //             . " at {$now->format('h:i A')}";
+
+    //         $this->sendViaGoip($student->guardian_contact_number, $message);
 
     //         return response()->json([
     //             'type' => 'student',
     //             'isSuccess' => true,
     //             'message' => $action . ' recorded',
     //             'attendance' => $attendance,
-    //             'name' => $student->first_name . ' ' . $student->last_name
+    //             'name' => $fullName
     //         ], 200);
     //     }
 
     //     // =========================
     //     // CHECK EMPLOYEE
     //     // =========================
-    //     $employee = Employee::whereRaw("REPLACE(rfid_tag_number, ' ', '') = ?", [$rfid])
-    //         ->where('is_archived', 0)
-    //         ->first();
+    //     $employee = Employee::whereRaw(
+    //         "REPLACE(REPLACE(rfid_tag_number, ' ', ''), '-', '') = ?",
+    //         [$rfid]
+    //     )->where('is_archived', 0)->first();
 
     //     if ($employee) {
 
@@ -403,33 +208,55 @@ class StudentAttendanceController extends Controller
     //             ->orderBy('time_in', 'desc')
     //             ->first();
 
+    //         // =========================
+    //         // 5 MIN COOLDOWN (EMPLOYEE)
+    //         // =========================
+    //         if ($attendance) {
+
+    //             $lastScanTime = $attendance->time_out ?: $attendance->time_in;
+
+    //             if ($lastScanTime) {
+    //                 $lastScanTime = Carbon::parse($lastScanTime)->setTimezone('Asia/Manila');
+
+    //                 if ($lastScanTime->diffInMinutes($now) < 5) {
+
+    //                     $remaining = 5 - $lastScanTime->diffInMinutes($now);
+
+    //                     return response()->json([
+    //                         'type' => 'employee',
+    //                         'isSuccess' => false,
+    //                         'message' => "Please wait {$remaining} more minute(s) before tapping again"
+    //                     ], 429);
+    //                 }
+    //             }
+    //         }
+
+    //         // =========================
+    //         // TIME IN / OUT
+    //         // =========================
     //         if (!$attendance || $attendance->time_out) {
+
     //             $attendance = EmployeeAttendance::create([
     //                 'employee_number' => $employee->employee_number,
     //                 'attendance_date' => $today,
     //                 'time_in' => $now,
     //                 'status' => 'Timed In'
     //             ]);
+
     //             $action = 'TIME IN';
     //         } else {
+
     //             $attendance->update([
     //                 'time_out' => $now,
     //                 'status' => 'Timed Out'
     //             ]);
+
     //             $action = 'TIME OUT';
     //         }
 
     //         Log::info("EMPLOYEE ACTION: $action", [
     //             'employee_number' => $employee->employee_number
     //         ]);
-
-    //         // SEND SMS
-    //         $this->sendSms(
-    //             $employee->first_name . ' ' . $employee->last_name,
-    //             $employee->contact_number,
-    //             $action,
-    //             $now
-    //         );
 
     //         return response()->json([
     //             'type' => 'employee',
@@ -440,11 +267,184 @@ class StudentAttendanceController extends Controller
     //         ], 200);
     //     }
 
+    //     // =========================
+    //     // NOT FOUND
+    //     // =========================
     //     return response()->json([
     //         'isSuccess' => false,
     //         'message' => 'RFID not recognized'
     //     ], 404);
     // }
+
+
+
+    /**
+     * Time in PHILSMS (backup)
+     */
+
+    public function tapRFID(Request $request)
+    {
+        $request->validate([
+            'rfid_tag_number' => 'required|string',
+        ]);
+
+        Log::info('RFID TAP RECEIVED');
+
+        $now = Carbon::now('Asia/Manila');
+        $today = $now->toDateString();
+
+        // =========================
+        // NORMALIZE RFID
+        // =========================
+        $rfid = trim($request->rfid_tag_number);
+        $rfid = preg_replace('/\D/', '', $rfid);
+
+        Log::info('RFID DEBUG', [
+            'raw' => $request->rfid_tag_number,
+            'normalized' => $rfid
+        ]);
+
+        // =========================
+        // GLOBAL COOLDOWN CHECK (5 MIN)
+        // =========================
+
+        $lastStudent = StudentAttendance::whereHas('student', function ($q) use ($rfid) {
+            $q->whereRaw("REPLACE(rfid_tag_number, ' ', '') = ?", [$rfid]);
+        })
+            ->latest('created_at')
+            ->first();
+
+        $lastEmployee = EmployeeAttendance::whereHas('employee', function ($q) use ($rfid) {
+            $q->whereRaw("REPLACE(rfid_tag_number, ' ', '') = ?", [$rfid]);
+        })
+            ->latest('created_at')
+            ->first();
+
+        $lastAttendance = collect([$lastStudent, $lastEmployee])
+            ->filter()
+            ->sortByDesc('created_at')
+            ->first();
+
+        if ($lastAttendance) {
+            $lastTime = Carbon::parse($lastAttendance->created_at)->setTimezone('Asia/Manila');
+
+            if ($lastTime->diffInMinutes($now) < 5) {
+                $remaining = 5 - $lastTime->diffInMinutes($now);
+
+                return response()->json([
+                    'isSuccess' => false,
+                    'message' => "Please wait {$remaining} more minute(s) before tapping again"
+                ], 429);
+            }
+        }
+
+        // =========================
+        // CHECK STUDENT FIRST
+        // =========================
+        $student = Students::whereRaw("REPLACE(rfid_tag_number, ' ', '') = ?", [$rfid])
+            ->where('is_archived', 0)
+            ->first();
+
+        if ($student) {
+
+            $attendance = StudentAttendance::where('student_number', $student->student_number)
+                ->where('attendance_date', $today)
+                ->orderBy('time_in', 'desc')
+                ->first();
+
+            if (!$attendance || $attendance->time_out) {
+                $attendance = StudentAttendance::create([
+                    'student_number' => $student->student_number,
+                    'attendance_date' => $today,
+                    'time_in' => $now,
+                    'status' => 'Timed In'
+                ]);
+                $action = 'TIME IN';
+            } else {
+                $attendance->update([
+                    'time_out' => $now,
+                    'status' => 'Timed Out'
+                ]);
+                $action = 'TIME OUT';
+            }
+
+            Log::info("STUDENT ACTION: $action", [
+                'student_number' => $student->student_number
+            ]);
+
+            // SEND SMS
+            $this->sendSms(
+                $student->first_name . ' ' . $student->last_name,
+                $student->guardian_contact_number,
+                $action,
+                $now
+            );
+
+            return response()->json([
+                'type' => 'student',
+                'isSuccess' => true,
+                'message' => $action . ' recorded',
+                'attendance' => $attendance,
+                'name' => $student->first_name . ' ' . $student->last_name
+            ], 200);
+        }
+
+        // =========================
+        // CHECK EMPLOYEE
+        // =========================
+        $employee = Employee::whereRaw("REPLACE(rfid_tag_number, ' ', '') = ?", [$rfid])
+            ->where('is_archived', 0)
+            ->first();
+
+        if ($employee) {
+
+            $attendance = EmployeeAttendance::where('employee_number', $employee->employee_number)
+                ->where('attendance_date', $today)
+                ->orderBy('time_in', 'desc')
+                ->first();
+
+            if (!$attendance || $attendance->time_out) {
+                $attendance = EmployeeAttendance::create([
+                    'employee_number' => $employee->employee_number,
+                    'attendance_date' => $today,
+                    'time_in' => $now,
+                    'status' => 'Timed In'
+                ]);
+                $action = 'TIME IN';
+            } else {
+                $attendance->update([
+                    'time_out' => $now,
+                    'status' => 'Timed Out'
+                ]);
+                $action = 'TIME OUT';
+            }
+
+            Log::info("EMPLOYEE ACTION: $action", [
+                'employee_number' => $employee->employee_number
+            ]);
+
+            // SEND SMS
+            $this->sendSms(
+                $employee->first_name . ' ' . $employee->last_name,
+                $employee->contact_number,
+                $action,
+                $now
+            );
+
+            return response()->json([
+                'type' => 'employee',
+                'isSuccess' => true,
+                'message' => $action . ' recorded',
+                'attendance' => $attendance,
+                'name' => $employee->first_name . ' ' . $employee->last_name
+            ], 200);
+        }
+
+        return response()->json([
+            'isSuccess' => false,
+            'message' => 'RFID not recognized'
+        ], 404);
+    }
 
     private function sendSms($fullName, $number, $action, $now)
     {
