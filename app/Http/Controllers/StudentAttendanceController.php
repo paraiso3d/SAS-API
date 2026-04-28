@@ -506,6 +506,8 @@ class StudentAttendanceController extends Controller
             'message' => 'RFID not recognized'
         ], 404);
     }
+
+
     private function sendSms($fullName, $number, $action, $now)
     {
         try {
@@ -550,9 +552,8 @@ class StudentAttendanceController extends Controller
     private function sendViaGoip($number, $message)
     {
         try {
-            if (!$number) return;
+            if (!$number) return null;
 
-            // Ensure PH format (09XXXXXXXXX)
             $number = preg_replace('/^63/', '0', $number);
             $number = preg_replace('/\D/', '', $number);
 
@@ -575,19 +576,17 @@ class StudentAttendanceController extends Controller
 
             if (curl_errno($ch)) {
                 Log::error('GOIP ERROR: ' . curl_error($ch));
-            } else {
-                Log::info('SMS SENT VIA GOIP', [
-                    'number' => $number,
-                    'message' => $message,
-                    'response' => $response
-                ]);
             }
 
             curl_close($ch);
+
+            return $response; // ← IMPORTANT
         } catch (\Throwable $e) {
             Log::error('GOIP FAILED', [
                 'error' => $e->getMessage()
             ]);
+
+            return null;
         }
     }
 
