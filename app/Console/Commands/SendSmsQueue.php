@@ -63,7 +63,7 @@ class SendSmsQueue extends Command
             }
 
             if ($index < count($messages) - 1) {
-                sleep(6);
+                sleep(rand(5, 10));
             }
         }
     }
