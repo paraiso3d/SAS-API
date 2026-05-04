@@ -332,6 +332,186 @@ class StudentAttendanceController extends Controller
      * Time in PHILSMS (backup)
      */
 
+    // public function tapRFID(Request $request)
+    // {
+    //     $request->validate([
+    //         'rfid_tag_number' => 'required|string',
+    //     ]);
+
+    //     Log::info('RFID TAP RECEIVED');
+
+    //     $now = Carbon::now('Asia/Manila');
+    //     $today = $now->toDateString();
+
+    //     // =========================
+    //     // NORMALIZE RFID (SAFE VERSION)
+    //     // =========================
+    //     $rfid = trim($request->rfid_tag_number);
+
+    //     Log::info('RFID DEBUG', [
+    //         'raw' => $request->rfid_tag_number,
+    //         'normalized' => $rfid
+    //     ]);
+
+    //     // =========================
+    //     // 🔒 FAST TAP LOCK (FIXES YOUR MAIN ISSUE)
+    //     // =========================
+    //     $lockKey = "rfid_lock_" . $rfid;
+
+    //     if (cache()->has($lockKey)) {
+    //         return response()->json([
+    //             'isSuccess' => false,
+    //             'message' => 'Please wait before tapping again'
+    //         ], 429);
+    //     }
+
+    //     // lock for 3 seconds (prevents double / spam taps)
+    //     cache()->put($lockKey, true, 3);
+
+    //     // =========================
+    //     // GLOBAL COOLDOWN CHECK (5 MIN)
+    //     // =========================
+    //     $lastStudent = StudentAttendance::whereHas('student', function ($q) use ($rfid) {
+    //         $q->whereRaw("TRIM(rfid_tag_number) = ?", [$rfid]);
+    //     })
+    //         ->latest('created_at')
+    //         ->first();
+
+    //     $lastEmployee = EmployeeAttendance::whereHas('employee', function ($q) use ($rfid) {
+    //         $q->whereRaw("TRIM(rfid_tag_number) = ?", [$rfid]);
+    //     })
+    //         ->latest('created_at')
+    //         ->first();
+
+    //     $lastAttendance = collect([$lastStudent, $lastEmployee])
+    //         ->filter()
+    //         ->sortByDesc('created_at')
+    //         ->first();
+
+    //     if ($lastAttendance) {
+    //         $lastTime = Carbon::parse($lastAttendance->created_at)->setTimezone('Asia/Manila');
+
+    //         if ($lastTime->diffInMinutes($now) < 5) {
+    //             $remaining = 5 - $lastTime->diffInMinutes($now);
+
+    //             return response()->json([
+    //                 'isSuccess' => false,
+    //                 'message' => "Please wait {$remaining} more minute(s) before tapping again"
+    //             ], 429);
+    //         }
+    //     }
+
+    //     // =========================
+    //     // CHECK STUDENT FIRST
+    //     // =========================
+    //     $student = Students::whereRaw("TRIM(rfid_tag_number) = ?", [$rfid])
+    //         ->where('is_archived', 0)
+    //         ->first();
+
+    //     if ($student) {
+
+    //         $attendance = StudentAttendance::where('student_number', $student->student_number)
+    //             ->where('attendance_date', $today)
+    //             ->orderBy('time_in', 'desc')
+    //             ->first();
+
+    //         if (!$attendance || $attendance->time_out) {
+    //             $attendance = StudentAttendance::create([
+    //                 'student_number' => $student->student_number,
+    //                 'attendance_date' => $today,
+    //                 'time_in' => $now,
+    //                 'status' => 'Timed In'
+    //             ]);
+    //             $action = 'TIME IN';
+    //         } else {
+    //             $attendance->update([
+    //                 'time_out' => $now,
+    //                 'status' => 'Timed Out'
+    //             ]);
+    //             $action = 'TIME OUT';
+    //         }
+
+    //         Log::info("STUDENT ACTION: $action", [
+    //             'student_number' => $student->student_number
+    //         ]);
+
+    //         $this->sendSms(
+    //             $student->first_name . ' ' . $student->last_name,
+    //             $student->guardian_contact_number,
+    //             $action,
+    //             $now
+    //         );
+
+    //         return response()->json([
+    //             'type' => 'student',
+    //             'isSuccess' => true,
+    //             'message' => $action . ' recorded',
+    //             'attendance' => $attendance,
+    //             'name' => $student->first_name . ' ' . $student->last_name
+    //         ], 200);
+    //     }
+
+    //     // =========================
+    //     // CHECK EMPLOYEE
+    //     // =========================
+    //     $employee = Employee::whereRaw("TRIM(rfid_tag_number) = ?", [$rfid])
+    //         ->where('is_archived', 0)
+    //         ->first();
+
+    //     if ($employee) {
+
+    //         $attendance = EmployeeAttendance::where('employee_number', $employee->employee_number)
+    //             ->where('attendance_date', $today)
+    //             ->orderBy('time_in', 'desc')
+    //             ->first();
+
+    //         if (!$attendance || $attendance->time_out) {
+    //             $attendance = EmployeeAttendance::create([
+    //                 'employee_number' => $employee->employee_number,
+    //                 'attendance_date' => $today,
+    //                 'time_in' => $now,
+    //                 'status' => 'Timed In'
+    //             ]);
+    //             $action = 'TIME IN';
+    //         } else {
+    //             $attendance->update([
+    //                 'time_out' => $now,
+    //                 'status' => 'Timed Out'
+    //             ]);
+    //             $action = 'TIME OUT';
+    //         }
+
+    //         Log::info("EMPLOYEE ACTION: $action", [
+    //             'employee_number' => $employee->employee_number
+    //         ]);
+
+    //         $this->sendSms(
+    //             $employee->first_name . ' ' . $employee->last_name,
+    //             $employee->contact_number,
+    //             $action,
+    //             $now
+    //         );
+
+    //         return response()->json([
+    //             'type' => 'employee',
+    //             'isSuccess' => true,
+    //             'message' => $action . ' recorded',
+    //             'attendance' => $attendance,
+    //             'name' => $employee->first_name . ' ' . $employee->last_name
+    //         ], 200);
+    //     }
+
+    //     return response()->json([
+    //         'isSuccess' => false,
+    //         'message' => 'RFID not recognized'
+    //     ], 404);
+    // }
+
+
+
+    /**
+     * Time in Itextmo (backup)
+     */
     public function tapRFID(Request $request)
     {
         $request->validate([
@@ -344,7 +524,7 @@ class StudentAttendanceController extends Controller
         $today = $now->toDateString();
 
         // =========================
-        // NORMALIZE RFID (SAFE VERSION)
+        // NORMALIZE RFID
         // =========================
         $rfid = trim($request->rfid_tag_number);
 
@@ -354,7 +534,7 @@ class StudentAttendanceController extends Controller
         ]);
 
         // =========================
-        // 🔒 FAST TAP LOCK (FIXES YOUR MAIN ISSUE)
+        // FAST TAP LOCK
         // =========================
         $lockKey = "rfid_lock_" . $rfid;
 
@@ -365,23 +545,18 @@ class StudentAttendanceController extends Controller
             ], 429);
         }
 
-        // lock for 3 seconds (prevents double / spam taps)
         cache()->put($lockKey, true, 3);
 
         // =========================
-        // GLOBAL COOLDOWN CHECK (5 MIN)
+        // GLOBAL COOLDOWN (5 MIN)
         // =========================
         $lastStudent = StudentAttendance::whereHas('student', function ($q) use ($rfid) {
             $q->whereRaw("TRIM(rfid_tag_number) = ?", [$rfid]);
-        })
-            ->latest('created_at')
-            ->first();
+        })->latest('created_at')->first();
 
         $lastEmployee = EmployeeAttendance::whereHas('employee', function ($q) use ($rfid) {
             $q->whereRaw("TRIM(rfid_tag_number) = ?", [$rfid]);
-        })
-            ->latest('created_at')
-            ->first();
+        })->latest('created_at')->first();
 
         $lastAttendance = collect([$lastStudent, $lastEmployee])
             ->filter()
@@ -402,7 +577,7 @@ class StudentAttendanceController extends Controller
         }
 
         // =========================
-        // CHECK STUDENT FIRST
+        // STUDENT FLOW
         // =========================
         $student = Students::whereRaw("TRIM(rfid_tag_number) = ?", [$rfid])
             ->where('is_archived', 0)
@@ -435,7 +610,8 @@ class StudentAttendanceController extends Controller
                 'student_number' => $student->student_number
             ]);
 
-            $this->sendSms(
+            // ✅ SMS ONLY FOR STUDENTS
+            $this->sendSmsItexmo(
                 $student->first_name . ' ' . $student->last_name,
                 $student->guardian_contact_number,
                 $action,
@@ -452,7 +628,7 @@ class StudentAttendanceController extends Controller
         }
 
         // =========================
-        // CHECK EMPLOYEE
+        // EMPLOYEE FLOW (NO SMS)
         // =========================
         $employee = Employee::whereRaw("TRIM(rfid_tag_number) = ?", [$rfid])
             ->where('is_archived', 0)
@@ -485,12 +661,7 @@ class StudentAttendanceController extends Controller
                 'employee_number' => $employee->employee_number
             ]);
 
-            $this->sendSms(
-                $employee->first_name . ' ' . $employee->last_name,
-                $employee->contact_number,
-                $action,
-                $now
-            );
+            // ❌ NO SMS HERE (INTENTIONALLY REMOVED)
 
             return response()->json([
                 'type' => 'employee',
@@ -505,6 +676,46 @@ class StudentAttendanceController extends Controller
             'isSuccess' => false,
             'message' => 'RFID not recognized'
         ], 404);
+    }
+
+    private function sendSmsItexmo($name, $number, $action, $time)
+    {
+        try {
+            if (!$number) return;
+
+            $number = trim($number);
+
+            if (str_starts_with($number, '639')) {
+                $number = '0' . substr($number, 2);
+            }
+
+            $message = "{$name} has {$action} at " . $time->format('h:i A');
+
+            Log::info('iTexMo SMS DEBUG', [
+                'number' => $number,
+                'message' => $message
+            ]);
+
+            $response = Http::asForm()->timeout(5)->post(
+                'https://api.itexmo.com/api/broadcast',
+                [
+                    'Email' => env('ITEXMO_EMAIL'),
+                    'Password' => env('ITEXMO_PASSWORD'),
+                    'ApiCode' => env('ITEXMO_API_CODE'),
+                    'Recipients' => json_encode([$number]),
+                    'Message' => $message,
+                ]
+            );
+
+            Log::info('iTexMo RESPONSE', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+        } catch (\Exception $e) {
+            Log::error('iTexMo SMS failed', [
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
 
@@ -548,7 +759,6 @@ class StudentAttendanceController extends Controller
         }
     }
 
-
     private function sendViaGoip($number, $message)
     {
         try {
@@ -580,7 +790,7 @@ class StudentAttendanceController extends Controller
 
             curl_close($ch);
 
-            return $response; // ← IMPORTANT
+            return $response;
         } catch (\Throwable $e) {
             Log::error('GOIP FAILED', [
                 'error' => $e->getMessage()

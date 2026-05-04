@@ -13,14 +13,15 @@ class SendSmsQueue extends Command
      *
      * @var string
      */
-    protected $signature = 'command:name';
+    protected $signature = 'sms:send-queue';
+
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Command description';
+    protected $description = 'Send pending SMS from queue';
 
     /**
      * Create a new command instance.
